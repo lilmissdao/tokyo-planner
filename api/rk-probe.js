@@ -12,6 +12,7 @@ module.exports=async(req,res)=>{
     simple:`SimpleHotelSearch/20260731?latitude=35.6676&longitude=139.7657&searchRadius=1&datumType=1&hits=1&responseType=large`,
     detail:`HotelDetailSearch/20260731?hotelNo=182801&responseType=large&datumType=1`,
     vacant:`VacantHotelSearch/20170426?latitude=35.6676&longitude=139.7657&searchRadius=1&datumType=1&hits=2&checkinDate=2026-11-10&checkoutDate=2026-11-12&adultNum=2&responseType=large`,
+    v:`VacantHotelSearch/20170426?hotelNo=28576&checkinDate=2026-11-10&checkoutDate=${req.query.co||'2026-11-11'}&adultNum=${req.query.a||2}&responseType=large`,
     vacantsq:`VacantHotelSearch/20170426?latitude=35.6676&longitude=139.7657&searchRadius=1&datumType=1&hits=3&checkinDate=2026-11-10&checkoutDate=2026-11-12&adultNum=2&squeezeCondition=${encodeURIComponent(req.query.sq||'daiyoku')}`,
   };
   const r=await fetch(base+urls[which]+auth,H);const t=await r.text();
