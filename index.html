@@ -1269,13 +1269,13 @@ async function hapi(params){
   if(!r.ok){const e=new Error('http '+r.status);e.status=r.status;throw e;}
   RK_OK=true;return r.json();
 }
-/* which Rakuten hotel a place is: saved on the place, or the nearest one within 250 m */
+/* which Rakuten hotel a place is: saved on the place, or the nearest one within 120 m */
 function hotelNo(o){
   if(o.rk)return o.rk.none?0:o.rk.no;
   const k='m:'+ckey(o.lat,o.lng),c=HC[k];
   if(c)return c.no||0;
   if(RK_OK===false)return 0;
-  queueH(k,async()=>{const j=await hapi({action:'match',lat:o.lat,lng:o.lng});const h=(j?.hotels||[]).find(x=>x.m<=250);HC[k]={no:h?h.no:0,t:Date.now()};});
+  queueH(k,async()=>{const j=await hapi({action:'match',lat:o.lat,lng:o.lng});const h=(j?.hotels||[]).find(x=>x.m<=120);HC[k]={no:h?h.no:0,t:Date.now()};});
   return null;
 }
 function queueH(k,fn){
