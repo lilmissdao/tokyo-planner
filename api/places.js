@@ -1,5 +1,5 @@
 const FIELDS_SEARCH='places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.primaryTypeDisplayName,places.types,places.photos';
-const FIELDS_AREA='places.id,places.displayName,places.formattedAddress,places.location,nextPageToken';
+const FIELDS_AREA='places.id,places.displayName,places.formattedAddress,places.location,places.types,nextPageToken';
 const FIELDS_DETAILS='id,displayName,formattedAddress,location,rating,userRatingCount,reviews,photos,websiteUri,googleMapsUri,regularOpeningHours.weekdayDescriptions,editorialSummary,primaryTypeDisplayName,types,nationalPhoneNumber';
 module.exports=async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
