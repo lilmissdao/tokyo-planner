@@ -249,6 +249,23 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
 @keyframes flash{0%,40%{background:rgba(31,58,147,.14)}100%{background:transparent}}
 .msel{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 10px;font-size:13px;font-weight:700}
 .msel select{border:1.5px solid var(--rule);border-radius:6px;padding:3px 4px;font-size:12px;font-weight:700;background:#fff;max-width:120px}
+.dot{width:14px;height:14px;border-radius:50%;background:var(--c);border:2.5px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.45);flex:none}
+.gresults .pinall{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;background:var(--wash);border-bottom:1px solid var(--rule);font-size:12.5px;color:var(--ink-2)}
+.gresults .pinall span{flex-basis:100%}
+.gresults .pinall input{flex:1;min-width:90px;border:1.5px solid var(--rule);border-radius:6px;padding:5px 7px;font-size:13px;background:#fff}
+.gresults .pinall button{display:inline-block;width:auto;border:0;background:var(--ink);color:#fff;border-radius:6px;padding:6px 10px;font-weight:700;font-size:13px}
+.gresults .pinall button:hover{background:#2E3750}
+.dlayer{border:1.5px solid var(--rule);border-radius:12px;margin:12px 0;padding:0 12px}
+.dlayer summary{display:flex;align-items:center;gap:8px;padding:10px 0;cursor:pointer;font-weight:900;font-size:15px;list-style:none}
+.dlayer summary::-webkit-details-marker{display:none}
+.dlayer summary small{font-weight:500;color:var(--ink-3);font-size:12px}
+.dlayer summary .del{margin-left:auto;border:0;background:none;color:var(--ink-3);font-size:12px;font-weight:700;padding:4px}
+.dlayer summary .del:hover{color:#C4001A}
+.dlayer.off summary{color:var(--ink-3)}
+.dotrow{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 2px;border-top:1px solid var(--rule);cursor:pointer}
+.dotrow b{font-size:13.5px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dotrow.sel{background:linear-gradient(90deg,var(--wash),transparent)}
+.dotrow.flash{animation:flash 1.4s ease-out}
 .searchpin{width:22px;height:22px;border-radius:50%;background:#C4001A;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
 @media (max-width:820px){
   .gsearch{left:14px;width:calc(100% - 140px)}
@@ -298,6 +315,7 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
     <div class="search"><input id="q" type="search" placeholder="Filter by name or bio" aria-label="Filter places"></div>
     <p class="hint" style="margin:-4px 0 6px">Tap a place to see it on the map. Tap its icon to favorite it. Double-click a name or bio to edit it. To add a photo, copy an image, point at or click a place, and press Ctrl+V (Cmd+V on Mac). You can also drag an image onto a place.</p>
     <div id="list"></div>
+    <div id="dots"></div>
     <hr>
     <p class="hint">Your places and photos save in this browser. Export a backup (photos included) to move them to another device.</p>
     <div class="row2">
@@ -523,11 +541,11 @@ const mkPlace=([cat,name,lat,lng,notes,status])=>({id:uid(),cat,name,lat,lng,not
 function seedState(){
   const places=SEED.map(mkPlace);
   const homeId=places[SEED.findIndex(r=>r[6])].id;
-  return {v:5,places,homeId,queue:[],days:[{id:uid(),name:'Day 1',stops:[],modes:{},loop:true}],activeDay:0,hidden:[]};
+  return {v:5,places,homeId,layers:[],queue:[],days:[{id:uid(),name:'Day 1',stops:[],modes:{},loop:true}],activeDay:0,hidden:[]};
 }
 function migrate(s){
   s.favOnly??=false;
-  s.hidden??=[];s.queue??=[];s.days??=[{id:uid(),name:'Day 1',stops:[],modes:{},loop:true}];
+  s.hidden??=[];s.queue??=[];s.layers??=[];s.days??=[{id:uid(),name:'Day 1',stops:[],modes:{},loop:true}];
   s.days.forEach(d=>{d.id??=uid();d.modes??={};d.stops??=[];});
   if(!s.v||s.v<2){ANCHORS.forEach(r=>{if(!s.places.some(p=>p.name===r[1]))s.places.unshift(mkPlace(r));});}
   s.places.forEach(p=>{p.photos??=[];p.notes??='';if(!p.address&&ADDR[p.name])p.address=ADDR[p.name];p.address??='';});
@@ -699,7 +717,10 @@ const gmaps=(a,b,m)=>`https://www.google.com/maps/dir/?api=1&origin=${a.lat},${a
 /* ---------- helpers ---------- */
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const byId=id=>S.places.find(p=>p.id===id);
+const byId=id=>S.places.find(p=>p.id===id)||dotById(id);
+/* pinned "all locations" searches: each layer is a custom category of map dots */
+function dotById(id){if(!id||!String(id).startsWith('d_'))return null;for(const l of S.layers)for(const d of l.items)if(d.id===id)return d;return null;}
+const layerOf=id=>S.layers.find(l=>l.items.some(d=>d.id===id));
 const day=()=>S.days[S.activeDay]||S.days[0];
 const daysOf=id=>S.days.filter(d=>d.stops.includes(id));
 const onTrip=id=>daysOf(id).length>0;
@@ -796,6 +817,14 @@ function renderMarkers(){
     m.on('click',()=>{if(popupPlaceId===p.id)showInList(p.id);else openMini(p.id);});
     markers[p.id]=m;
   });
+  S.layers.forEach(l=>{
+    if(S.hidden.includes(l.id))return;
+    l.items.forEach(d=>{
+      const m=L.marker([d.lat,d.lng],{icon:L.divIcon({className:'',html:`<div class="dot" style="--c:${l.color}"></div>`,iconSize:[14,14],iconAnchor:[7,7]}),title:d.name,riseOnHover:true,zIndexOffset:-200}).addTo(placeLayer);
+      m.on('click',()=>{if(popupPlaceId===d.id)showInList(d.id);else openMini(d.id);});
+      markers[d.id]=m;
+    });
+  });
 }
 function tripLabel(id){const ds=[...new Set(daysOf(id).map(d=>d.name))];if(!ds.length)return '';return ds.length>2?`${ds[0]} +${ds.length-1} more`:ds.join(', ');}
 /* first destination click: a small card on the map. Second click: show it in the list */
@@ -814,7 +843,7 @@ function miniHtml(p){
 function openMini(id){
   const p=byId(id);if(!p)return;
   selected=id;highlightRow(id);
-  const sz=p.cat==='anchor'?36:32;
+  const sz=layerOf(id)?14:p.cat==='anchor'?36:32;
   mini=L.popup({className:'minipop',closeButton:false,closeOnClick:false,maxWidth:230,minWidth:200,offset:[0,-sz/2+4],autoPanPaddingTopLeft:[12,70],autoPanPaddingBottomRight:[12,12]})
     .setLatLng([p.lat,p.lng]).setContent(miniHtml(p)).openOn(map);
   popupPlaceId=id;
@@ -828,7 +857,7 @@ async function loadMiniG(p){
 map.on('popupclose',e=>{if(e.popup===mini){mini=null;popupPlaceId=null;}});
 map.on('click',()=>{if(mini&&!moving)map.closePopup(mini);});
 function refreshPopup(){if(!mini||!popupPlaceId)return;const p=byId(popupPlaceId);if(!p){map.closePopup(mini);return;}mini.setContent(miniHtml(p));hydrate(mini.getElement());}
-function highlightRow(id){document.querySelectorAll('.place').forEach(el=>el.classList.toggle('sel',el.dataset.id===id));}
+function highlightRow(id){document.querySelectorAll('.place,.dotrow').forEach(el=>el.classList.toggle('sel',el.dataset.id===id));}
 function select(id,fly=true){
   selected=id;linkLayer.clearLayers();
   const p=byId(id);if(!p)return;
@@ -845,15 +874,20 @@ function showInList(id){
   const p=byId(id);if(!p)return;
   const wasCollapsed=document.body.classList.contains('collapsed');
   setCollapsed(false);showTab('places');
-  if(!visible(p)){S.hidden=S.hidden.filter(c=>c!==p.cat);save();}
-  const q=$('#q').value.trim().toLowerCase();if(q&&!(p.name+' '+p.notes).toLowerCase().includes(q))$('#q').value='';
+  const lay=layerOf(id);
+  if(lay){S.hidden=S.hidden.filter(c=>c!==lay.id);openLayers.add(lay.id);save();}
+  else{
+    if(!visible(p)){S.hidden=S.hidden.filter(c=>c!==p.cat);save();}
+    const q=$('#q').value.trim().toLowerCase();if(q&&!(p.name+' '+p.notes).toLowerCase().includes(q))$('#q').value='';
+  }
   selected=id;refresh();
   setTimeout(()=>{
     if(wasCollapsed&&mini&&popupPlaceId===id)map.panTo(lowCenter([p.lat,p.lng],map.getZoom()));
-    const row=document.querySelector(`.place[data-id="${id}"]`);if(!row)return;
-    row.scrollIntoView({block:'start'});
+    const sel=`.place[data-id="${id}"],.dotrow[data-id="${id}"]`;
+    const row=document.querySelector(sel);if(!row)return;
+    row.scrollIntoView({block:lay?'center':'start'});
     /* photos loading into rows above can push it down, so line it up again */
-    [400,1000].forEach(t=>setTimeout(()=>{if(selected===id)document.querySelector(`.place[data-id="${id}"]`)?.scrollIntoView({block:'start'});},t));
+    [400,1000].forEach(t=>setTimeout(()=>{if(selected===id)document.querySelector(sel)?.scrollIntoView({block:lay?'center':'start'});},t));
     row.classList.remove('flash');void row.offsetWidth;row.classList.add('flash');
   },wasCollapsed?120:0);
 }
@@ -874,19 +908,24 @@ function renderChips(){
     const n=S.places.filter(p=>p.cat===k).length;
     return `<button class="chip" data-cat="${k}" aria-pressed="${!S.hidden.includes(k)}" title="Show or hide ${c.label}">${av(k)}<span>${c.label} <small>${n}</small></span></button>`;
   }).join('');
+  $('#chips').innerHTML+=S.layers.map(l=>`<button class="chip" data-layer="${l.id}" aria-pressed="${!S.hidden.includes(l.id)}" title="Show or hide ${esc(l.name)}">${layerAv(l,40)}<span>${esc(l.name)} <small>${l.items.length}</small></span></button>`).join('');
   const fc=$('#favCount');fc.hidden=!nf;fc.textContent=nf;
-  $('#legend').innerHTML=Object.entries(CATS).map(([k,c])=>`<button data-cat="${k}" aria-pressed="${!S.hidden.includes(k)}" aria-label="${S.hidden.includes(k)?'Show':'Hide'} ${c.label}" title="${c.label}">${av(k,30)}</button>`).join('');
+  $('#legend').innerHTML=Object.entries(CATS).map(([k,c])=>`<button data-cat="${k}" aria-pressed="${!S.hidden.includes(k)}" aria-label="${S.hidden.includes(k)?'Show':'Hide'} ${c.label}" title="${c.label}">${av(k,30)}</button>`).join('')
+    +S.layers.map(l=>`<button data-layer="${l.id}" aria-pressed="${!S.hidden.includes(l.id)}" aria-label="${S.hidden.includes(l.id)?'Show':'Hide'} ${esc(l.name)}" title="${esc(l.name)}">${layerAv(l,30)}</button>`).join('');
 }
 function toggleCat(k){
   const hide=!S.hidden.includes(k);
   S.hidden=hide?[...S.hidden,k]:S.hidden.filter(x=>x!==k);
   save();refresh();toast(`${CATS[k].label} ${hide?'hidden':'shown'}`);
 }
+const layerAv=(l,size)=>`<span class="av" style="--c:${l.color};--s:${size}px"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="#fff" stroke="none"/></svg></span>`;
+function toggleLayer(id){const l=S.layers.find(x=>x.id===id);if(!l)return;const hide=!S.hidden.includes(id);S.hidden=hide?[...S.hidden,id]:S.hidden.filter(x=>x!==id);save();refresh();toast(`${l.name} ${hide?'hidden':'shown'}`);}
 function favAv(size,on){return `<span class="av" style="--c:#E8B100;--s:${size}px"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.3 5.4 5.7.6-4.3 3.9 1.3 5.8L12 15.8l-5 2.9 1.3-5.8L4 9l5.7-.6z"/></svg></span>`;}
 $('#chips').onclick=e=>{
   if(e.target.closest('[data-favonly]')){S.favOnly=!S.favOnly;save();refresh();toast(S.favOnly?'Showing all favorites':'Favorites now follow their category');return;}
+  const l=e.target.closest('[data-layer]');if(l)return toggleLayer(l.dataset.layer);
   const b=e.target.closest('[data-cat]');if(b)toggleCat(b.dataset.cat);};
-$('#legend').onclick=e=>{const b=e.target.closest('[data-cat]');if(b)toggleCat(b.dataset.cat);};
+$('#legend').onclick=e=>{const l=e.target.closest('[data-layer]');if(l)return toggleLayer(l.dataset.layer);const b=e.target.closest('[data-cat]');if(b)toggleCat(b.dataset.cat);};
 
 /* ---------- Google places: search, details, photos, reviews ---------- */
 let G_OK=null;const GCACHE={};let gResults=[],searchMarker=null,sheetCtx=null,linkTarget=null;
@@ -962,9 +1001,61 @@ function renderResults(){
   const box=$('#gres');
   if(!gResults.length){box.innerHTML='<p class="hint" style="padding:10px 12px;margin:0">No places found. Try another name or spelling.</p>';return;}
   const lt=linkTarget&&byId(linkTarget);
-  box.innerHTML=(lt?`<div class="linkhead"><span>Pick the result that matches <b>${esc(lt.name)}</b></span><button type="button" data-cancel-link="1">Cancel</button></div>`:'')+gResults.map((r,i)=>`<button type="button" data-gi="${i}">${r.photo?`<img src="${gphoto(r.photo,120)}" alt="" loading="lazy">`:'<span class="noimg"></span>'}<span><b>${esc(r.name)}</b>${r.rating?`<small><span class="stars">★ ${r.rating.toFixed(1)}</span> (${fmtCount(r.count)})${r.type?', '+esc(r.type):''}</small>`:r.type?`<small>${esc(r.type)}</small>`:''}<small>${esc(r.addr)}</small></span></button>`).join('');
+  const q=$('#gq').value.trim();
+  const pin=!lt&&q?`<div class="pinall"><span>Pin every “${esc(q)}” in this map view as a category:</span><input id="pinName" value="${esc(S.layers.find(l=>l.q.toLowerCase()===q.toLowerCase())?.name||q)}" aria-label="Category name" maxlength="40"><button type="button" data-pinall="1">Pin all in view</button></div>`:'';
+  box.innerHTML=pin+(lt?`<div class="linkhead"><span>Pick the result that matches <b>${esc(lt.name)}</b></span><button type="button" data-cancel-link="1">Cancel</button></div>`:'')+gResults.map((r,i)=>`<button type="button" data-gi="${i}">${r.photo?`<img src="${gphoto(r.photo,120)}" alt="" loading="lazy">`:'<span class="noimg"></span>'}<span><b>${esc(r.name)}</b>${r.rating?`<small><span class="stars">★ ${r.rating.toFixed(1)}</span> (${fmtCount(r.count)})${r.type?', '+esc(r.type):''}</small>`:r.type?`<small>${esc(r.type)}</small>`:''}<small>${esc(r.addr)}</small></span></button>`).join('');
 }
-$('#gres').onclick=e=>{if(e.target.closest('[data-cancel-link]')){linkTarget=null;renderResults();return;}const b=e.target.closest('[data-gi]');if(!b)return;const r=gResults[+b.dataset.gi];showRes(false);openResult(r);};
+$('#gres').onclick=e=>{if(e.target.closest('[data-pinall]')){pinAll($('#gq').value.trim(),$('#pinName').value.trim());return;}if(e.target.closest('[data-cancel-link]')){linkTarget=null;renderResults();return;}const b=e.target.closest('[data-gi]');if(!b)return;const r=gResults[+b.dataset.gi];showRes(false);openResult(r);};
+$('#gres').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='pinName'){e.preventDefault();pinAll($('#gq').value.trim(),e.target.value.trim());}});
+/* a random color that no category or other pinned search already uses */
+const DOT_COLORS=['#E4007F','#7B1FA2','#AFB42B','#6D4C41','#1E88E5','#FF7043','#AD1457','#3949AB','#5E35B1','#D84315','#558B2F','#546E7A'];
+function pickColor(){
+  const used=new Set([...Object.values(CATS).map(c=>c.color),...S.layers.map(l=>l.color)].map(c=>c.toUpperCase()));
+  const free=DOT_COLORS.filter(c=>!used.has(c));
+  if(free.length)return free[Math.floor(Math.random()*free.length)];
+  for(;;){const c='#'+[0,0,0].map(()=>(40+Math.floor(Math.random()*176)).toString(16).padStart(2,'0')).join('').toUpperCase();if(!used.has(c))return c;}
+}
+const normName=t=>t.toLowerCase().replace(/[^a-z0-9]/g,'');
+let pinBusy=false;
+async function pinAll(q,name){
+  if(!q||pinBusy)return;name=name||q;pinBusy=true;
+  const bd=map.getBounds(),box=$('#gres');
+  const area={south:bd.getSouth().toFixed(5),west:bd.getWest().toFixed(5),north:bd.getNorth().toFixed(5),east:bd.getEast().toFixed(5)};
+  box.innerHTML=`<p class="hint" style="padding:10px 12px;margin:0">Finding every “${esc(q)}” in this map view…</p>`;showRes(true);
+  let found=[];
+  try{
+    if(G_OK!==false){
+      try{
+        let token='';
+        for(let i=0;i<3;i++){
+          const j=await gapi({action:'area',q,...area,...(token?{pageToken:token}:{})});
+          found.push(...(j.places||[]).map(p=>({gid:p.id,name:p.displayName?.text||q,address:p.formattedAddress||'',lat:p.location?.latitude,lng:p.location?.longitude})));
+          token=j.nextPageToken;if(!token)break;
+        }
+      }catch(e){if(G_OK!==false)throw e;}
+    }
+    if(G_OK===false){
+      const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=50&bounded=1&accept-language=en&viewbox=${area.west},${area.north},${area.east},${area.south}&q=${encodeURIComponent(q)}`);
+      found=(await r.json()).map(x=>({name:x.name||x.display_name.split(',')[0],address:x.display_name,lat:+x.lat,lng:+x.lon}));
+    }
+  }catch(e){pinBusy=false;box.innerHTML='<p class="hint" style="padding:10px 12px;margin:0">Could not search this area right now. Try again in a moment.</p>';return;}
+  pinBusy=false;
+  found=found.filter(r=>r.lat!=null&&bd.contains([r.lat,r.lng]));
+  /* for a chain like 7-Eleven, keep only places whose name matches */
+  const nq=normName(q),named=found.filter(r=>normName(r.name).includes(nq));
+  if(nq.length>=3&&named.length>=found.length/2)found=named;
+  if(!found.length){box.innerHTML=`<p class="hint" style="padding:10px 12px;margin:0">No “${esc(q)}” found in this map view. Zoom out or move the map, then try again.</p>`;return;}
+  let l=S.layers.find(x=>x.name.toLowerCase()===name.toLowerCase());
+  if(!l){l={id:'l_'+uid(),name,color:pickColor(),q,items:[]};S.layers.push(l);}
+  let added=0;
+  for(const r of found){
+    if(l.items.some(d=>(r.gid&&d.gid===r.gid)||(Math.abs(d.lat-r.lat)<1e-5&&Math.abs(d.lng-r.lng)<1e-5)))continue;
+    l.items.push({id:'d_'+uid()+uid(),gid:r.gid,name:r.name,address:r.address,lat:r.lat,lng:r.lng,photos:[]});added++;
+  }
+  S.hidden=S.hidden.filter(x=>x!==l.id);save();refresh();showRes(false);
+  const more=found.length>=60?' Google returns up to 60 at a time, so zoom in on an area and pin again to fill it in.':'';
+  toast(added?`Pinned ${added} ${l.name} location${added>1?'s':''}${added<found.length?` (${found.length-added} already pinned)`:''}.${more}`:`All ${found.length} in this view were already pinned.`);
+}
 async function openResult(r){
   if(r.lat!=null){showSearchPin(r.lat,r.lng);map.flyTo([r.lat,r.lng],Math.max(map.getZoom(),16),{duration:.6});}
   const mine=linkTarget?null:S.places.find(p=>(r.id&&p.gid===r.id));
@@ -1103,6 +1194,23 @@ function renderList(){
      </div></div>`;}).join('');
   hydrate($('#list'));hydrateG($('#list'));
 }
+
+const openLayers=new Set();
+function renderDots(){
+  $('#dots').innerHTML=S.layers.map(l=>{
+    const off=S.hidden.includes(l.id);
+    return `<details class="dlayer${off?' off':''}" data-lid="${l.id}"${openLayers.has(l.id)?' open':''}><summary><span class="dot" style="--c:${off?'#C9CED6':l.color}"></span>${esc(l.name)} <small>${l.items.length} pinned${off?', hidden on map':''}</small><button class="del" data-ldel="${l.id}">Delete</button></summary>
+      ${l.items.map(d=>`<div class="dotrow${d.id===selected?' sel':''}" data-id="${d.id}"><span class="dot" style="--c:${l.color}"></span><div><b>${esc(d.name)}</b>${d.address?`<div class="mline"><button class="copy" onclick="app.copyAddr('${d.id}',event)" aria-label="Copy address of ${esc(d.name)}" title="Copy address">${COPY_ICON}</button><span>${esc(d.address)}</span></div>`:''}</div><button class="xbtn" data-drm="${d.id}" aria-label="Remove ${esc(d.name)}" title="Remove">✕</button></div>`).join('')}</details>`;
+  }).join('');
+}
+$('#dots').addEventListener('toggle',e=>{const d=e.target.closest('details[data-lid]');if(d)d.open?openLayers.add(d.dataset.lid):openLayers.delete(d.dataset.lid);},true);
+$('#dots').onclick=e=>{
+  const del=e.target.closest('[data-ldel]');
+  if(del){e.preventDefault();const l=S.layers.find(x=>x.id===del.dataset.ldel);if(l&&confirm(`Delete ${l.name} and its ${l.items.length} pins?`)){S.layers=S.layers.filter(x=>x!==l);S.hidden=S.hidden.filter(x=>x!==l.id);map.closePopup();save();refresh();toast(`${l.name} deleted`);}return;}
+  const rm=e.target.closest('[data-drm]');
+  if(rm){const l=layerOf(rm.dataset.drm);if(l){l.items=l.items.filter(d=>d.id!==rm.dataset.drm);if(popupPlaceId===rm.dataset.drm)map.closePopup();save();refresh();}return;}
+  const row=e.target.closest('.dotrow');if(row&&!e.target.closest('button'))select(row.dataset.id);
+};
 
 /* inline editing: double-click name or bio */
 function startEdit(el){
@@ -1496,7 +1604,7 @@ function setCollapsed(c){
   setTimeout(()=>map.invalidateSize(),60);
 }
 function renderHome(){const h=byId(S.homeId);$('#homePill').innerHTML=h?`Home base<b>${esc(h.name)}</b>`:'No home base set';}
-function refresh(){S.days.forEach(normalizeDay);renderHome();renderChips();renderList();renderGroups();renderMarkers();renderRoute();}
+function refresh(){S.days.forEach(normalizeDay);renderHome();renderChips();renderList();renderDots();renderGroups();renderMarkers();renderRoute();}
 /* panel resize (desktop) and collapse (mobile) */
 (function(){
   try{const w=+localStorage.getItem('tokyo-planner-pw');if(w)document.body.style.setProperty('--pw',w+'px');}catch(e){}
