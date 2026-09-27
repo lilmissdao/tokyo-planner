@@ -314,6 +314,15 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
 .maptools #hotelsBtn[hidden]{display:none}
 .mini .htag{font-size:10.5px;padding:0 6px}
 .mini .hprice b{font-size:12.5px}
+.chipsbar{display:flex;align-items:center;gap:6px;margin:-2px 0 8px;font-size:12px;color:var(--ink-3);font-weight:700}
+.chipsbar span{margin-right:auto;text-transform:uppercase;letter-spacing:.04em;font-size:11px}
+.chipsbar button{border:1.5px solid var(--rule);background:#fff;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;color:var(--ink-2)}
+.chipsbar button:hover{border-color:var(--ink);color:var(--ink)}
+.totop{position:absolute;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:40;display:flex;align-items:center;gap:4px;border:0;background:var(--ink);color:#fff;border-radius:999px;padding:8px 13px 8px 10px;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(28,34,48,.3)}
+.totop[hidden]{display:none}
+.totop svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.totop:hover{background:#2E3750}
+body.collapsed .totop{display:none}
 .searchpin{width:22px;height:22px;border-radius:50%;background:#C4001A;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
 @media (max-width:820px){
   .gsearch{left:14px;width:calc(100% - 140px)}
@@ -359,6 +368,7 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
     <button role="tab" aria-selected="false" data-tab="route">Directions</button>
   </nav>
   <section class="tabpane" id="tab-places">
+    <div class="chipsbar"><span>Categories</span><button type="button" data-all="1">Select all</button><button type="button" data-all="0">Deselect all</button></div>
     <div class="chips" id="chips"></div>
     <div class="hotelbar" id="hotelbar" hidden></div>
     <div class="search"><input id="q" type="search" placeholder="Filter by name or bio" aria-label="Filter places"></div>
@@ -388,6 +398,7 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
     </div>
     <div id="route"></div>
   </section>
+  <button class="totop" id="toTop" hidden aria-label="Back to top" title="Back to top"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg><span>Top</span></button>
 </aside>
 <main id="mapwrap">
   <div id="map" aria-label="Map of Tokyo"></div>
@@ -1833,7 +1844,19 @@ $('#importFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';
   }catch(err){alert('That file is not a Tokyo Planner backup.');}};
 $('#resetBtn').onclick=()=>{if(confirm('Replace everything with the starter list? Export a backup first if you want to keep your changes.')){S=seedState();save();refresh();}};
 
-function showTab(t){document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));document.querySelectorAll('.tabpane').forEach(p=>p.hidden=p.id!=='tab-'+t);}
+/* select or deselect every category, including Favorites and your added categories */
+document.querySelector('.chipsbar').onclick=e=>{
+  const b=e.target.closest('[data-all]');if(!b)return;
+  const on=b.dataset.all==='1';
+  S.hidden=on?[]:[...Object.keys(CATS),...S.layers.map(l=>l.id)];S.favOnly=on;
+  save();refresh();toast(on?'All categories shown':'All categories hidden');
+};
+/* back to top for whichever tab is open */
+const openPane=()=>[...document.querySelectorAll('.tabpane')].find(p=>!p.hidden);
+function syncTop(){const p=openPane();$('#toTop').hidden=!p||p.scrollTop<400;}
+document.querySelectorAll('.tabpane').forEach(p=>p.addEventListener('scroll',syncTop,{passive:true}));
+$('#toTop').onclick=()=>{const p=openPane();if(p)p.scrollTo({top:0,behavior:'smooth'});};
+function showTab(t){document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));document.querySelectorAll('.tabpane').forEach(p=>p.hidden=p.id!=='tab-'+t);syncTop();}
 document.querySelector('nav.tabs').onclick=e=>{const b=e.target.closest('button');if(b)showTab(b.dataset.tab);};
 function setCollapsed(c){
   if(document.body.classList.contains('collapsed')===c)return;
