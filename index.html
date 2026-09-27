@@ -191,6 +191,10 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
 .gsearch .go{border:0;background:var(--ink);color:#fff;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:700}
 .gresults{margin-top:6px;background:#fff;border:1.5px solid var(--rule);border-radius:12px;box-shadow:0 8px 24px rgba(28,34,48,.16);max-height:55vh;overflow:auto}
 .gresults[hidden]{display:none}
+.gresults:not([hidden]){border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom:0}
+.gfold{display:grid;place-items:center;width:100%;height:24px;margin:0;padding:0;background:#fff;border:1.5px solid var(--rule);border-top:1px solid var(--rule);border-radius:0 0 12px 12px;box-shadow:0 8px 24px rgba(28,34,48,.16);touch-action:none}
+.gfold span{width:36px;height:4px;border-radius:2px;background:#C9CED6}
+.gfold[hidden]{display:none}
 .gresults .gr{border-bottom:1px solid var(--rule)}
 .gresults .gr:last-child{border-bottom:0}
 .gresults .grh{display:grid;grid-template-columns:52px 1fr;gap:10px;width:100%;text-align:left;border:0;background:none;padding:8px 10px;align-items:center}
@@ -432,6 +436,7 @@ body.collapsed .totop{display:none}
   <div class="gsearch">
     <form class="bar" id="gform" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input id="gq" type="search" placeholder="Search any place in Japan" aria-label="Search places" autocomplete="off"><button type="button" class="gx" id="gx" hidden aria-label="Close search results" title="Close results">✕</button><button class="go" type="submit">Search</button></form>
     <div class="gresults" id="gres" hidden></div>
+    <button type="button" class="gfold" id="gfold" hidden aria-label="Collapse the results" title="Swipe up or tap to collapse"><span></span></button>
   </div>
   <aside class="sheet" id="sheet" hidden aria-label="Place details"></aside>
   <div class="picking" id="pickingMsg" hidden></div>
@@ -1067,21 +1072,34 @@ function guessCat(types){
 }
 function showSearchPin(lat,lng){searchMarker?.remove();searchMarker=L.marker([lat,lng],{icon:L.divIcon({className:'',html:'<div class="searchpin"></div>',iconSize:[22,22],iconAnchor:[11,11]}),zIndexOffset:900}).addTo(map);}
 let searchTok=0,liveT;
-function showRes(on){$('#gres').hidden=!on;$('#gx').hidden=!on;if(on)fitRes();}
+function showRes(on){$('#gres').hidden=!on;$('#gfold').hidden=!on;syncGx();if(on)fitRes();}
+/* ✕ shows whenever there is text; it clears the search completely */
+function syncGx(){$('#gx').hidden=!$('#gq').value;}
+function clearSearch(){clearTimeout(liveT);searchTok++;$('#gq').value='';gResults=[];gOpen=-1;pinNameVal=null;$('#gres').innerHTML='';showRes(false);searchMarker?.remove();searchMarker=null;$('#gq').blur();}
+/* swipe the results up (from the handle, or once the list is scrolled to its end) to collapse them */
+(function(){
+  let y0=0,armed=false;
+  const start=e=>{const r=$('#gres');armed=!!e.target.closest('#gfold')||r.scrollTop+r.clientHeight>=r.scrollHeight-2;y0=e.touches[0].clientY;};
+  const end=e=>{if(armed&&(e.changedTouches[0]?.clientY??y0)-y0<-50)showRes(false);armed=false;};
+  ['gres','gfold'].forEach(id=>{$('#'+id).addEventListener('touchstart',start,{passive:true});$('#'+id).addEventListener('touchend',end);});
+  $('#gfold').onclick=()=>showRes(false);
+})();
 /* keep the results inside the map area so they never run into the dashboard */
-function fitRes(){const r=$('#gres');if(r.hidden)return;const m=$('#mapwrap').getBoundingClientRect(),top=r.getBoundingClientRect().top;r.style.maxHeight=Math.max(160,m.bottom-top-12)+'px';}
+function fitRes(){const r=$('#gres');if(r.hidden)return;const m=$('#mapwrap').getBoundingClientRect(),top=r.getBoundingClientRect().top;r.style.maxHeight=Math.max(160,m.bottom-top-40)+'px';}
 addEventListener('resize',fitRes);
 /* tapping anywhere outside the search box or its results closes the results */
 document.addEventListener('pointerdown',e=>{if(!$('#gres').hidden&&!e.target.closest('.gsearch'))showRes(false);},true);
 $('#gform').onsubmit=e=>{e.preventDefault();clearTimeout(liveT);doSearch();};
 $('#gq').addEventListener('keydown',e=>{if(e.key==='Escape'){clearTimeout(liveT);showRes(false);}});
 $('#gq').addEventListener('focus',()=>{if($('#gres').innerHTML)showRes(true);});
+$('#gq').addEventListener('click',()=>{if($('#gres').innerHTML&&$('#gres').hidden)showRes(true);});
 /* typing clears the old results, then searches for the new text once typing pauses */
 $('#gq').addEventListener('input',()=>{
+  syncGx();
   clearTimeout(liveT);searchTok++;gResults=[];gOpen=-1;pinNameVal=null;$('#gres').innerHTML='';showRes(false);searchMarker?.remove();searchMarker=null;
   if($('#gq').value.trim().length>=3)liveT=setTimeout(doSearch,600);
 });
-$('#gx').onclick=()=>{clearTimeout(liveT);showRes(false);$('#gq').blur();};
+$('#gx').onclick=clearSearch;
 async function doSearch(){
   const q=$('#gq').value.trim();if(!q)return;
   const tok=++searchTok;gOpen=-1;
