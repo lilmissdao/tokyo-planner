@@ -1166,7 +1166,9 @@ function renderChips(){
   $('#allBtn').textContent=allShown()?'Deselect all':'Select all';
   const nf=S.places.filter(p=>p.fav).length;
   const order=catOrder(),lay=k=>S.layers.find(l=>l.id===k);
-  $('#chips').innerHTML=`<button class="chip" data-favonly="1" aria-pressed="${!!S.favOnly}" title="Always show favorites, whatever category they are in">${favAv(40,S.favOnly)}<span>Favorites <small>${nf}</small></span></button>`+order.map(k=>{
+  /* the bar shows the categories that are on first; each one keeps its place from your order within its group */
+  const on=order.filter(k=>!S.hidden.includes(k)),barOrder=[...on,...order.filter(k=>S.hidden.includes(k))];
+  $('#chips').innerHTML=`<button class="chip" data-favonly="1" aria-pressed="${!!S.favOnly}" title="Always show favorites, whatever category they are in">${favAv(40,S.favOnly)}<span>Favorites <small>${nf}</small></span></button>`+barOrder.map(k=>{
     const l=lay(k);
     if(l)return `<button class="chip" data-layer="${l.id}" aria-pressed="${!S.hidden.includes(l.id)}" title="Show or hide ${esc(l.name)}">${layerAv(l,40)}<span>${esc(l.name)} <small>${l.items.length}</small></span></button>`;
     const c=CATS[k],n=S.places.filter(p=>p.cat===k).length;
@@ -2384,8 +2386,10 @@ function refresh(){rebuildCats();S.days.forEach(normalizeDay);renderHome();rende
   rz.addEventListener('pointerdown',e=>{e.preventDefault();startX=e.clientX;startW=$('#panel').getBoundingClientRect().width;rz.classList.add('drag');window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);});
   rz.addEventListener('keydown',e=>{if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;const w=$('#panel').getBoundingClientRect().width+(e.key==='ArrowRight'?20:-20);document.body.style.setProperty('--pw',Math.max(320,Math.min(window.innerWidth*0.7,w))+'px');map.invalidateSize();});
   /* when the dashboard is hidden on a phone, tapping its title bar brings it back */
-  $('#panel header').addEventListener('click',()=>{if(document.body.classList.contains('collapsed'))setCollapsed(false);setCatOpen(false);});
-  $('#panel .grab').addEventListener('click',()=>{if(document.body.classList.contains('collapsed'))setCollapsed(false);setCatOpen(false);});
+  /* tap the header or handle: opens the dashboard when it's down, puts it back down when it's open */
+  const tapBar=()=>{if(!phone())return;if(document.body.classList.contains('collapsed'))setCollapsed(false);else setSheet('min');};
+  $('#panel header').addEventListener('click',tapBar);
+  $('#panel .grab').addEventListener('click',tapBar);
 })();
 settleHotelFavs();placeCatbar();save();refresh();syncRouteBtn();fillAddresses();
 </script>
