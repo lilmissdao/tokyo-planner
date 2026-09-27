@@ -19,29 +19,34 @@ function clean(svg){
 }
 const PROMPT=name=>`Design 4 different simple icons for a map category called "${name}" in a Tokyo trip planner.
 Style: a 24x24 viewBox line icon like Lucide or Feather. White strokes, stroke-width 2, round caps, no fill. Keep each to 1-5 shapes, bold and readable at 20px inside a colored circle. Keep shapes within 3..21 on both axes. Make the 4 ideas visibly different from each other.
-Reply with only JSON, no prose: {"icons":["<inner svg markup>", ...]} where each item is the shapes only (path, circle, rect, line, polyline, polygon, ellipse), without the <svg> wrapper.`;
+Reply with only the 4 icons, one per line, each as <svg viewBox="0 0 24 24">...</svg> using only path, circle, rect, line, polyline, polygon or ellipse. No other text.`;
+async function draw(name){
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':process.env.ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01'},
+    body:JSON.stringify({model:'claude-sonnet-5',max_tokens:2000,messages:[{role:'user',content:PROMPT(name)}]})});
+  if(!r.ok){const t=await r.text().catch(()=>'');throw new Error(`ai ${r.status} ${t.slice(0,200)}`);}
+  const j=await r.json(),text=(j.content||[]).map(c=>c.text||'').join('').replace(/\\"/g,'"');
+  /* one icon per <svg>; if the wrappers are missing, treat each line as one icon */
+  let list=text.match(/<svg[\s\S]*?<\/svg>/gi)||[];
+  if(!list.length)list=text.split(/\n/);
+  const icons=list.map(clean).filter(Boolean).slice(0,4);
+  if(!icons.length)throw new Error('no_icons '+JSON.stringify(text.slice(0,200)));
+  return icons;
+}
 module.exports=async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   if(!process.env.ANTHROPIC_API_KEY){res.status(503).json({error:'not_configured'});return;}
   const ref=req.headers.referer||'';
-  if(ref&&!(ref.startsWith('https://tokyo-planner')&&ref.includes('.vercel.app/'))){res.status(403).json({error:'forbidden'});return;}
+  if(ref&&!(ref.startsWith('https://tokyo-planner')&&ref.includes('.vercel.app/'))){console.error('icon: blocked referer',ref);res.status(403).json({error:'forbidden'});return;}
   const name=String(req.query.name||'').trim().slice(0,40);
   if(!name){res.status(400).json({error:'bad_query'});return;}
   const ip=String(req.headers['x-forwarded-for']||'').split(',')[0],now=Date.now();
   const h=(hits.get(ip)||[]).filter(t=>now-t<3600e3);
   if(h.length>=40){res.status(429).json({error:'busy'});return;}
   h.push(now);hits.set(ip,h);
-  try{
-    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':process.env.ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01'},
-      body:JSON.stringify({model:'claude-sonnet-5',max_tokens:2000,messages:[{role:'user',content:PROMPT(name)}]})});
-    if(!r.ok){res.status(502).json({error:'ai '+r.status});return;}
-    const j=await r.json(),text=(j.content||[]).map(c=>c.text||'').join('');
-    /* take the JSON list if it parses, otherwise pull the shapes straight out of the text */
-    let list=[];
-    try{const m=text.match(/\{[\s\S]*\}/);list=m?JSON.parse(m[0]).icons||[]:[];}catch(e){}
-    if(!list.length)list=text.split(/\n\s*\n|",\s*"/);
-    const icons=list.map(s=>clean(String(s).replace(/\\"/g,'"'))).filter(Boolean).slice(0,4);
-    if(!icons.length){res.status(502).json({error:'no_icons'});return;}
-    res.status(200).json({icons});
-  }catch(e){res.status(502).json({error:'failed'});}
+  /* a second try covers a busy moment or an odd reply */
+  for(let a=0;a<2;a++){
+    try{res.status(200).json({icons:await draw(name)});return;}
+    catch(e){console.error(`icon: try ${a+1} for "${name}" failed:`,e.message);}
+  }
+  res.status(502).json({error:'failed'});
 };
