@@ -299,6 +299,8 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
 .pbtn:hover{background:var(--wash);color:var(--ink)}
 .pbtn[aria-pressed="true"]{color:#C99A00}
 .pbtn[aria-pressed="true"] svg{fill:#E8B100}
+.fbtn{color:#C99A00}
+.fbtn:hover{color:#E8B100}
 .dlayer summary .ponly{white-space:nowrap;flex:none;border:1.5px solid var(--rule);background:#fff;border-radius:999px;padding:2px 9px;font-size:11.5px;font-weight:700;color:var(--ink-2)}
 .dlayer summary .ponly[aria-pressed="true"]{background:#E8B100;border-color:#E8B100;color:#fff}
 .hotelbar{border:1.5px solid var(--rule);border-radius:12px;padding:8px 10px;margin:-4px 0 12px;display:grid;gap:7px;font-size:12.5px;color:var(--ink-2)}
@@ -1324,6 +1326,8 @@ async function openPlaceSheet(id){
   else renderSheet(null);
 }
 const SHEET_TOP='<button class="shtop" data-sheet="top" aria-label="Back to top" title="Back to top"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>';
+/* a hotel result or a pinned location in a hotel category */
+function isHotelResult(r){const f=findDot(r);return (f&&lodgeLayer(f.l))||LODGE_TYPES.test((r.types||[]).join(' '));}
 function renderSheet(d,loading){
   const {r}=sheetCtx;const mine=sheetCtx.mine||(!linkTarget&&d&&S.places.find(p=>p.gid===d.id));
   const name=d?.displayName?.text||r.name,addr=d?.formattedAddress||r.addr||'';
@@ -1349,7 +1353,7 @@ function renderSheet(d,loading){
      ${reviews.length?`<h3>Reviews</h3>${reviews.map(v=>`<div class="review"><div class="who"><b>${esc(v.authorAttribution?.displayName||'Google user')}</b><span><span class="stars">★ ${v.rating||''}</span> ${esc(v.relativePublishTimeDescription||'')}</span></div><p>${esc(v.text?.text||v.originalText?.text||'')}</p></div>`).join('')}<div class="credit">Reviews from Google</div>`:''}
    </div>
    <div class="addbar"><span class="abgrip" aria-hidden="true"></span>${mine?`<button class="btn ghost small" data-sheet="show" data-id="${mine.id}">Show in list</button><button class="btn small" data-sheet="fav" data-id="${mine.id}">${mine.fav?'★ Favorited':'☆ Favorite'}</button>${mine.gid&&r.src==='g'?`<button class="btn ghost small" data-sheet="unlink" data-id="${mine.id}">Unlink</button>`:''}${SHEET_TOP}`
-     :linkBar(r,loading)+`<select id="sheetCat" aria-label="Category">${Object.entries(CATS).map(([k,c])=>`<option value="${k}"${k===guess?' selected':''}>${c.label}</option>`).join('')}</select><button class="btn" data-sheet="add"${loading?' disabled':''}>Add as a new place</button>${SHEET_TOP}`}</div>`;
+     :(isHotelResult(r)?`<button class="btn small" data-sheet="favhotel"${loading?' disabled':''}>☆ Favorite · add to Housing</button>`:'')+linkBar(r,loading)+`<select id="sheetCat" aria-label="Category">${Object.entries(CATS).map(([k,c])=>`<option value="${k}"${k===guess?' selected':''}>${c.label}</option>`).join('')}</select><button class="btn" data-sheet="add"${loading?' disabled':''}>Add as a new place</button>${SHEET_TOP}`}</div>`;
   requestAnimationFrame(syncSheetThumb);
 }
 function linkBar(r,loading){
@@ -1415,6 +1419,7 @@ $('#sheet').onclick=e=>{
   const b=e.target.closest('[data-sheet]');if(!b)return;const a=b.dataset.sheet;
   if(a==='close')return closeSheet();
   if(a==='top'){$('#sheet').scrollTo({top:0,behavior:'smooth'});return;}
+  if(a==='favhotel'){const {r}=sheetCtx,d=r.id&&GCACHE[r.id],dot=findDot(r);const p=favHotel({name:d?.displayName?.text||r.name,address:d?.formattedAddress||r.addr,lat:d?.location?.latitude??r.lat,lng:d?.location?.longitude??r.lng,gid:r.src==='g'?r.id:undefined,dotId:dot?.d.id,rk:dot?.d.rk});sheetCtx.mine=p;renderSheet(d||null);return;}
   if(a==='link')return linkPlace(b.dataset.id);
   if(a==='unlink'){const p=byId(b.dataset.id);if(p)ask({msg:`Unlink ${p.name} from this Google place? Its Google photos and reviews will stop showing until you relink it.`,ok:'Unlink',danger:true}).then(y=>{if(!y)return;delete p.gid;p.gtried=1;save();refresh();closeSheet();toast(`${p.name} unlinked`);});return;}
   if(a==='show'){const id=b.dataset.id;closeSheet();showInList(id);select(id);return;}
@@ -1551,7 +1556,7 @@ function hotelStatus(p){
   return 'ok';
 }
 function amenOk(p){
-  if(!hotelFiltering()||!LODGE(p))return true;
+  if(!hotelFiltering()||!LODGE(p)||!String(p.id).startsWith('d_'))return true;
   return !['amen','sold','price'].includes(hotelStatus(p));
 }
 /* "5 match · 20 over $300 · 8 no rooms · 3 missing amenity · checking 4…" */
@@ -1564,7 +1569,15 @@ function hotelSummary(list){
   if(c.checking)parts.push(`checking ${c.checking}…`);
   return parts.join(' · ');
 }
-const allLodging=()=>[...S.places.filter(LODGE),...S.layers.filter(l=>!S.hidden.includes(l.id)&&lodgeLayer(l)).flatMap(l=>l.items)];
+const allLodging=()=>[...S.layers.filter(l=>!S.hidden.includes(l.id)&&lodgeLayer(l)).flatMap(l=>l.items)];
+const STAR_ICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.3 5.4 5.7.6-4.3 3.9 1.3 5.8L12 15.8l-5 2.9 1.3-5.8L4 9l5.7-.6z"/></svg>';
+function favHotel(o){
+  let p=S.places.find(x=>(o.gid&&x.gid===o.gid)||(Math.abs(x.lat-o.lat)<1e-5&&Math.abs(x.lng-o.lng)<1e-5));
+  if(!p){p={id:uid(),cat:'housing',name:o.name,lat:o.lat,lng:o.lng,address:o.address||'',notes:'',status:'want',photos:[],...(o.gid?{gid:o.gid}:{}),...(o.rk?{rk:o.rk}:{})};S.places.push(p);}
+  p.fav=true;S.hidden=S.hidden.filter(c=>c!==p.cat);
+  if(o.dotId){const l=layerOf(o.dotId);if(l)l.items=l.items.filter(d=>d.id!==o.dotId);if(popupPlaceId===o.dotId)map.closePopup();}
+  save();refresh();toast(`${p.name} added to Housing as a favorite`);return p;
+}
 const lodgingShown=()=>!S.hidden.includes('housing')||!S.hidden.includes('onsen')||S.layers.some(l=>!S.hidden.includes(l.id)&&lodgeLayer(l));
 function renderHotelBar(){
   const el=$('#hotelbar');
@@ -1649,7 +1662,7 @@ function renderDots(){
     const np=l.items.filter(d=>d.pin).length,lodge=lodgeLayer(l);
     const items=[...l.items.filter(d=>d.pin),...l.items.filter(d=>!d.pin)].filter(d=>amenOk(d));
     return `<details class="dlayer" data-lid="${l.id}"${openLayers.has(l.id)?' open':''}><summary><span class="dot" style="--c:${l.color}"></span><span class="lname">${esc(l.name)}</span><small>${l.items.length}${np?` · ${np} pinned`:''}${lodge&&hotelFiltering()?` · ${hotelSummary(l.items)}`:''}</small>${np?`<button class="ponly" data-lponly="${l.id}" aria-pressed="${!!l.pinnedOnly}" title="Show only the pinned ones on the map">Pinned only</button>`:''}<button class="del" data-ldel="${l.id}">Delete</button></summary>
-      ${items.map(d=>{const open=d.id===openDot;return `<div class="dotrow${d.id===selected?' sel':''}${open?' open':''}" data-id="${d.id}"><span class="dot${d.pin?' pin':''}" style="--c:${l.color}"></span><div><b>${esc(d.name)}</b>${d.address?`<div class="mline"><button class="copy" onclick="app.copyAddr('${d.id}',event)" aria-label="Copy address of ${esc(d.name)}" title="Copy address">${COPY_ICON}</button><span>${esc(d.address)}</span></div>`:''}${lodge&&openLayers.has(l.id)?hotelHtml(d,!open):''}${open?`<div class="dmore">${infoHtml(d.gid,null,`data-dthumb="${d.id}"`)}</div>`:''}</div><div class="dacts"><button class="pbtn" data-dpin="${d.id}" aria-pressed="${!!d.pin}" aria-label="${d.pin?'Unpin':'Pin'} ${esc(d.name)}" title="${d.pin?'Unpin':'Pin to the top'}">${PIN_ICON}</button><button class="xbtn" data-drm="${d.id}" aria-label="Remove ${esc(d.name)}" title="Remove">✕</button></div></div>`;}).join('')}</details>`;
+      ${items.map(d=>{const open=d.id===openDot;return `<div class="dotrow${d.id===selected?' sel':''}${open?' open':''}" data-id="${d.id}"><span class="dot${d.pin?' pin':''}" style="--c:${l.color}"></span><div><b>${esc(d.name)}</b>${d.address?`<div class="mline"><button class="copy" onclick="app.copyAddr('${d.id}',event)" aria-label="Copy address of ${esc(d.name)}" title="Copy address">${COPY_ICON}</button><span>${esc(d.address)}</span></div>`:''}${lodge&&openLayers.has(l.id)?hotelHtml(d,!open):''}${open?`<div class="dmore">${infoHtml(d.gid,null,`data-dthumb="${d.id}"`)}</div>`:''}</div><div class="dacts">${lodge?`<button class="pbtn fbtn" data-dfav="${d.id}" aria-label="Favorite ${esc(d.name)} and add it to Housing" title="Favorite (adds to Housing)">${STAR_ICON}</button>`:''}<button class="pbtn" data-dpin="${d.id}" aria-pressed="${!!d.pin}" aria-label="${d.pin?'Unpin':'Pin'} ${esc(d.name)}" title="${d.pin?'Unpin':'Pin to the top'}">${PIN_ICON}</button><button class="xbtn" data-drm="${d.id}" aria-label="Remove ${esc(d.name)}" title="Remove">✕</button></div></div>`;}).join('')}</details>`;
   }).join('');
 }
 $('#dots').addEventListener('toggle',e=>{const d=e.target.closest('details[data-lid]');if(d)d.open?openLayers.add(d.dataset.lid):openLayers.delete(d.dataset.lid);},true);
@@ -1658,6 +1671,8 @@ $('#dots').onclick=e=>{
   if(po){e.preventDefault();const l=S.layers.find(x=>x.id===po.dataset.lponly);if(l){l.pinnedOnly=!l.pinnedOnly;save();refresh();toast(l.pinnedOnly?`Showing only pinned ${l.name} on the map`:`Showing all ${l.name} on the map`);}return;}
   const del=e.target.closest('[data-ldel]');
   if(del){e.preventDefault();const l=S.layers.find(x=>x.id===del.dataset.ldel);if(l)ask({msg:`Delete ${l.name} and its ${l.items.length} locations?`,ok:'Delete',danger:true}).then(y=>{if(!y)return;S.layers=S.layers.filter(x=>x!==l);S.hidden=S.hidden.filter(x=>x!==l.id);map.closePopup();save();refresh();toast(`${l.name} deleted`);});return;}
+  const fv=e.target.closest('[data-dfav]');
+  if(fv){const d=byId(fv.dataset.dfav);if(d){const p=favHotel({...d,dotId:d.id});if(openDot===d.id)openDot=null;}return;}
   const pn=e.target.closest('[data-dpin]');
   if(pn){const d=byId(pn.dataset.dpin);if(d){d.pin=!d.pin;save();refresh();toast(d.pin?`${d.name} pinned to the top`:`${d.name} unpinned`);}return;}
   const rm=e.target.closest('[data-drm]');
