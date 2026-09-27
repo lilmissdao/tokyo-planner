@@ -487,13 +487,6 @@ body.collapsed .totop,body.collapsed #panel>.catbar{display:none}
     <div class="search qwrap"><input id="q" type="search" placeholder="Filter by name or bio" aria-label="Filter places" autocomplete="off"><button type="button" class="qx" id="qx" hidden aria-label="Clear the filter" title="Clear">✕</button></div>
     <div id="list"></div>
     <div id="dots"></div>
-    <hr>
-    <p class="hint">Your places and photos save in this browser. Export a backup (photos included) to move them to another device.</p>
-    <div class="row2">
-      <button class="btn ghost small" id="exportBtn">Export backup</button>
-      <label class="btn ghost small" style="cursor:pointer">Import backup<input type="file" id="importFile" accept="application/json" hidden></label>
-      <button class="btn ghost small" id="resetBtn">Reset to starter list</button>
-    </div>
   </section>
   <section class="tabpane" id="tab-group" hidden>
     <p class="hint" style="margin:0 0 12px">Favorites within a 20-minute walk of each other are grouped automatically. Tap a group's name to see it on the map, or a place to go to it.</p>
@@ -2140,22 +2133,6 @@ $('#tglRoute').onclick=()=>{
 };
 $('#fitAll').onclick=()=>{const pts=S.places.filter(visible).map(p=>[p.lat,p.lng]);if(pts.length)map.fitBounds(pts,{padding:[40,40]});};
 
-/* ---------- backup (with photos) ---------- */
-const toDataURL=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b);});
-$('#exportBtn').onclick=async()=>{
-  toast('Preparing backup…');
-  const photoData={};
-  for(const p of S.places)for(const pid of p.photos||[]){try{const b=await idb.get(pid);if(b)photoData[pid]=await toDataURL(b);}catch(e){}}
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({...S,photoData})],{type:'application/json'}));a.download='tokyo-planner-backup.json';a.click();
-  toast('Backup downloaded');
-};
-$('#importFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
-  try{const j=JSON.parse(await f.text());if(!Array.isArray(j.places))throw 0;
-    const pd=j.photoData||{};delete j.photoData;
-    for(const [pid,du] of Object.entries(pd)){try{await idb.set(pid,await (await fetch(du)).blob());}catch(err){}}
-    S=migrate(j);S.activeDay=0;save();refresh();toast('Backup imported');
-  }catch(err){ask({msg:'That file is not a Tokyo Planner backup.',cancel:null});}};
-$('#resetBtn').onclick=async()=>{if(await ask({msg:'Replace everything with the starter list? Export a backup first if you want to keep your changes.',ok:'Replace',danger:true})){S=seedState();save();refresh();}};
 
 /* select or deselect every category, including Favorites and your added categories */
 function placeCatbar(){
