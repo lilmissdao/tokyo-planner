@@ -302,6 +302,16 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
 .hmeta a{color:var(--line);font-weight:700;text-decoration:none}
 .hwrong{border:0;background:none;padding:0;color:var(--ink-3);font-size:11.5px;text-decoration:underline}
 .mini .hotel{margin-top:0;gap:2px}
+.dotrow .hotel{margin-top:3px}
+.dotrow:not(.open) .hotel .htag{font-size:10.5px;padding:0 6px}
+.hdates{justify-self:start;border:1.5px dashed #C3C9D3;background:none;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700;color:var(--line)}
+.hdates:hover{border-color:var(--line)}
+.hmax{display:flex;align-items:center;gap:3px;margin-left:auto}
+.hmax input{width:64px}
+.hb3{color:var(--ink-3);font-size:11.5px;line-height:1.4}
+.hotelbar.flash{animation:flash 1.4s ease-out}
+.maptools #hotelsBtn[aria-pressed="true"]{background:var(--line);border-color:var(--line);color:#fff}
+.maptools #hotelsBtn[hidden]{display:none}
 .mini .htag{font-size:10.5px;padding:0 6px}
 .mini .hprice b{font-size:12.5px}
 .searchpin{width:22px;height:22px;border-radius:50%;background:#C4001A;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
@@ -384,6 +394,7 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
   <div class="maptools">
     <button id="tglStations" aria-pressed="true">Stations</button>
     <button id="fitAll">Show all</button>
+    <button id="hotelsBtn" hidden aria-pressed="false" title="Hotel dates, price and amenity filters">Hotel filters</button>
     <button id="fitRoute">Show route</button>
   </div>
   <div class="legend" id="legend" aria-label="Show or hide categories"></div>
@@ -580,11 +591,11 @@ const mkPlace=([cat,name,lat,lng,notes,status])=>({id:uid(),cat,name,lat,lng,not
 function seedState(){
   const places=SEED.map(mkPlace);
   const homeId=places[SEED.findIndex(r=>r[6])].id;
-  return {v:5,places,homeId,layers:[],trip:{in:'',out:'',adults:2},amen:[],queue:[],days:[{id:uid(),name:'Day 1',stops:[],modes:{},loop:true}],activeDay:0,hidden:[]};
+  return {v:5,places,homeId,layers:[],trip:{in:'',out:'',adults:2},amen:[],maxUsd:0,queue:[],days:[{id:uid(),name:'Day 1',stops:[],modes:{},loop:true}],activeDay:0,hidden:[]};
 }
 function migrate(s){
   s.favOnly??=false;
-  s.hidden??=[];s.queue??=[];s.layers??=[];s.trip??={in:'',out:'',adults:2};s.amen??=[];s.days??=[{id:uid(),name:'Day 1',stops:[],modes:{},loop:true}];
+  s.hidden??=[];s.queue??=[];s.layers??=[];s.trip??={in:'',out:'',adults:2};s.amen??=[];s.maxUsd??=0;s.days??=[{id:uid(),name:'Day 1',stops:[],modes:{},loop:true}];
   s.days.forEach(d=>{d.id??=uid();d.modes??={};d.stops??=[];});
   if(!s.v||s.v<2){ANCHORS.forEach(r=>{if(!s.places.some(p=>p.name===r[1]))s.places.unshift(mkPlace(r));});}
   s.places.forEach(p=>{p.photos??=[];p.notes??='';if(!p.address&&ADDR[p.name])p.address=ADDR[p.name];p.address??='';});
@@ -635,7 +646,7 @@ const GEO={},PENDING={},FAIL={};
 const OSRM={foot:'https://routing.openstreetmap.de/routed-foot/route/v1/foot/',car:'https://routing.openstreetmap.de/routed-car/route/v1/driving/'};
 const ck=(prof,a,b)=>`${prof}:${(+a.lat).toFixed(5)},${(+a.lng).toFixed(5)};${(+b.lat).toFixed(5)},${(+b.lng).toFixed(5)}`;
 let rcT;function saveRC(){clearTimeout(rcT);rcT=setTimeout(()=>{try{localStorage.setItem(RKEY,JSON.stringify(RC))}catch(e){}},600);}
-let soonT;function soon(){clearTimeout(soonT);soonT=setTimeout(()=>{renderHotelBar();renderMarkers();renderList();renderGroups();renderRoute();refreshPopup();},300);}
+let soonT;function soon(){clearTimeout(soonT);soonT=setTimeout(()=>{renderHotelBar();renderMarkers();renderList();renderDots();renderGroups();renderRoute();refreshPopup();},300);}
 /* the free routing server limits bursts, so ask it two routes at a time with a short gap */
 const jobs=[];let active=0;
 function pump(){while(active<2&&jobs.length){const j=jobs.shift();active++;j().finally(()=>setTimeout(()=>{active--;pump();},250));}}
@@ -861,6 +872,7 @@ function renderMarkers(){
     const onlyPinned=l.pinnedOnly&&l.items.some(d=>d.pin);
     l.items.forEach(d=>{
       if(onlyPinned&&!d.pin)return;
+      if(!amenOk(d))return;
       const sz=d.pin?18:14;
       const m=L.marker([d.lat,d.lng],{icon:L.divIcon({className:'',html:`<div class="dot${d.pin?' pin':''}" style="--c:${l.color}"></div>`,iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]}),title:d.name,riseOnHover:true,zIndexOffset:d.pin?-100:-200}).addTo(placeLayer);
       m.on('click',()=>{if(popupPlaceId===d.id)showInList(d.id);else openMini(d.id);});
@@ -1076,7 +1088,7 @@ function pinOne(r){
   const q=$('#gq').value.trim(),name=($('#pinName')?.value||'').trim()||q;
   let l=S.layers.find(x=>x.name.toLowerCase()===name.toLowerCase());
   if(!l){l={id:'l_'+uid(),name,color:pickColor(),q,items:[]};S.layers.push(l);}
-  l.items.push({id:'d_'+uid()+uid(),gid:r.src==='g'?r.id:undefined,name:r.name,address:r.addr,lat:r.lat,lng:r.lng,photos:[],pin:true});
+  l.items.push({id:'d_'+uid()+uid(),gid:r.src==='g'?r.id:undefined,name:r.name,address:r.addr,lat:r.lat,lng:r.lng,photos:[],pin:true,...(LODGE_TYPES.test((r.types||[]).join(' '))?{lodging:true}:{})});
   S.hidden=S.hidden.filter(x=>x!==l.id);save();refresh();renderResults();
   toast(`${r.name} pinned to the top of ${l.name}`);
 }
@@ -1119,14 +1131,14 @@ async function pinAll(q,name){
         let token='';
         for(let i=0;i<3;i++){
           const j=await gapi({action:'area',q,...area,...(token?{pageToken:token}:{})});
-          found.push(...(j.places||[]).map(p=>({gid:p.id,name:p.displayName?.text||q,address:p.formattedAddress||'',lat:p.location?.latitude,lng:p.location?.longitude})));
+          found.push(...(j.places||[]).map(p=>({gid:p.id,name:p.displayName?.text||q,address:p.formattedAddress||'',lat:p.location?.latitude,lng:p.location?.longitude,lodging:(p.types||[]).includes('lodging')})));
           token=j.nextPageToken;if(!token)break;
         }
       }catch(e){if(G_OK!==false)throw e;}
     }
     if(G_OK===false){
       const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=50&bounded=1&accept-language=en&viewbox=${area.west},${area.north},${area.east},${area.south}&q=${encodeURIComponent(q)}`);
-      found=(await r.json()).map(x=>({name:x.name||x.display_name.split(',')[0],address:x.display_name,lat:+x.lat,lng:+x.lon}));
+      found=(await r.json()).map(x=>({name:x.name||x.display_name.split(',')[0],address:x.display_name,lat:+x.lat,lng:+x.lon,lodging:x.class==='tourism'&&/hotel|hostel|guest_house|motel|apartment/.test(x.type||'')}));
     }
   }catch(e){pinBusy=false;box.innerHTML='<p class="hint" style="padding:10px 12px;margin:0">Could not search this area right now. Try again in a moment.</p>';return;}
   pinBusy=false;
@@ -1140,7 +1152,7 @@ async function pinAll(q,name){
   let added=0;
   for(const r of found){
     if(l.items.some(d=>(r.gid&&d.gid===r.gid)||(Math.abs(d.lat-r.lat)<1e-5&&Math.abs(d.lng-r.lng)<1e-5)))continue;
-    l.items.push({id:'d_'+uid()+uid(),gid:r.gid,name:r.name,address:r.address,lat:r.lat,lng:r.lng,photos:[]});added++;
+    l.items.push({id:'d_'+uid()+uid(),gid:r.gid,name:r.name,address:r.address,lat:r.lat,lng:r.lng,photos:[],...(r.lodging?{lodging:true}:{})});added++;
   }
   S.hidden=S.hidden.filter(x=>x!==l.id);save();refresh();showRes(false);
   const more=found.length>=60?' Google returns up to 60 at a time, so zoom in on an area and add again to fill it in.':'';
@@ -1248,7 +1260,10 @@ function hydrateG(root){root.querySelectorAll('.gblock[data-pid]:empty').forEach
 document.addEventListener('click',e=>{const t=e.target.closest('[data-greviews]');if(t){e.stopPropagation();openPlaceSheet(t.dataset.greviews);}},true);
 
 /* ---------- hotel prices and amenities from Rakuten Travel (Housing and Onsen places) ---------- */
-const LODGE=p=>!!p&&(p.cat==='housing'||p.cat==='onsen')&&!String(p.id).startsWith('d_');
+const LODGE_RE=/hotel|\binns?\b|hostel|ryokan|lodg|airbnb|guest ?house|capsule|stay|resort|ホテル|旅館|宿/i,LODGE_TYPES=/lodging|hotel|hostel|guest_house|ryokan|resort|motel/;
+const lodgeLayer=l=>!!l&&(LODGE_RE.test(l.name+' '+(l.q||''))||l.items.some(d=>d.lodging));
+/* Housing and Onsen places, and pinned locations in a hotel-type category */
+const LODGE=p=>{if(!p)return false;if(String(p.id).startsWith('d_'))return !!p.lodging||lodgeLayer(layerOf(p.id));return p.cat==='housing'||p.cat==='onsen';};
 const AMEN=[['bath','Bathhouse'],['breakfast','Breakfast'],['gym','Gym']];
 const HKEY='tokyo-planner-hotels';
 let HC={};try{HC=JSON.parse(localStorage.getItem(HKEY))||{}}catch(e){}
@@ -1315,30 +1330,47 @@ function hotelHtml(o,compact){
   if(!d)return `<div class="hotel"><span class="hint" style="font-size:12px">Checking Rakuten Travel…</span></div>`;
   if(d.none)return compact?'':`<div class="hotel"><span class="hint" style="font-size:12px">Not found on Rakuten Travel.</span></div>`;
   const tk=tripKey();
-  return `<div class="hotel">${amenTags(d.amen,compact)}${tk?priceText(d.price,compact):(compact?'':'<small class="hint">Set your hotel dates above to see prices.</small>')}${compact?'':`<small class="hmeta">${d.review?`Rakuten ★ ${(+d.review).toFixed(2)} (${fmtCount(d.reviews)}) · `:''}<a href="${esc(d.planUrl||d.url)}" target="_blank" rel="noopener">See rooms on Rakuten</a>${o.id?` · <button class="hwrong" data-hwrong="${o.id}" title="${esc(d.name)}">Wrong hotel?</button>`:''}</small>`}</div>`;
+  return `<div class="hotel">${amenTags(d.amen,compact)}${tk?priceText(d.price,compact):(compact?'':'<button class="hdates" data-hjump="1">Set hotel dates to see prices</button>')}${compact?'':`<small class="hmeta">${d.review?`Rakuten ★ ${(+d.review).toFixed(2)} (${fmtCount(d.reviews)}) · `:''}<a href="${esc(d.planUrl||d.url)}" target="_blank" rel="noopener">See rooms on Rakuten</a>${o.id?` · <button class="hwrong" data-hwrong="${o.id}" title="${esc(d.name)}">Wrong hotel?</button>`:''}</small>`}</div>`;
 }
 /* amenity filter: hide lodging known to lack a ticked amenity */
+const hotelFiltering=()=>S.amen.length>0||S.maxUsd>0;
+/* hotel filters: hide lodging known to lack a ticked amenity, or cheapest room over the max price */
 function amenOk(p){
-  if(!S.amen.length||!LODGE(p))return true;
+  if(!hotelFiltering()||!LODGE(p))return true;
   const d=hotelData(p);if(!d||d.none)return true;
-  return S.amen.every(k=>d.amen[k]);
+  if(!S.amen.every(k=>d.amen[k]))return false;
+  if(S.maxUsd>0&&tripKey()&&d.price){
+    if(d.price.soldOut)return false;
+    const fx=HC.fx;if(fx&&d.price.min/fx.jpy>S.maxUsd)return false;
+  }
+  return true;
 }
+const lodgingShown=()=>!S.hidden.includes('housing')||!S.hidden.includes('onsen')||S.layers.some(l=>!S.hidden.includes(l.id)&&lodgeLayer(l));
 function renderHotelBar(){
-  const show=!S.hidden.includes('housing')||!S.hidden.includes('onsen');
+  const show=lodgingShown();$('#hotelsBtn').hidden=!show||RK_OK===false;$('#hotelsBtn').setAttribute('aria-pressed',hotelFiltering());
   const el=$('#hotelbar');el.hidden=!show||RK_OK===false;if(el.hidden)return;
   if(el.contains(document.activeElement))return;
   const t=S.trip;
   el.innerHTML=`<div class="hb1"><b>Hotels</b><label>In <input type="date" id="tin" value="${t.in}"></label><label>Out <input type="date" id="tout" value="${t.out}"${t.in?` min="${t.in}"`:''}></label><label><select id="tad" aria-label="Guests">${[1,2,3,4].map(n=>`<option value="${n}"${n==t.adults?' selected':''}>${n} guest${n>1?'s':''}</option>`).join('')}</select></label></div>
-    <div class="hb2">${AMEN.map(([k,l])=>`<button class="afilt" data-amen="${k}" aria-pressed="${S.amen.includes(k)}">${l}</button>`).join('')}<small>${S.amen.length?'Only hotels with all ticked':'Tap to filter hotels'}</small></div>`;
+    <div class="hb2">${AMEN.map(([k,l])=>`<button class="afilt" data-amen="${k}" aria-pressed="${S.amen.includes(k)}">${l}</button>`).join('')}<label class="hmax">Max <span>$</span><input type="number" id="tmax" min="0" step="10" inputmode="numeric" placeholder="any" value="${S.maxUsd||''}" aria-label="Maximum price per night in US dollars"> / night</label></div>
+    <small class="hb3">${!t.in?'Set dates to see prices and use the max price. ':''}${hotelFiltering()?'Showing only hotels that match. ':'Tap an amenity or set a max price to filter hotels. '}Prices are per room per night on Rakuten.</small>`;
 }
 $('#hotelbar').addEventListener('change',e=>{
   const t=S.trip;
   if(e.target.id==='tin'){t.in=e.target.value;if(t.in&&(!t.out||t.out<=t.in)){const d=new Date(t.in+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+1);t.out=d.toISOString().slice(0,10);}}
   if(e.target.id==='tout')t.out=e.target.value;
   if(e.target.id==='tad')t.adults=+e.target.value;
+  if(e.target.id==='tmax')S.maxUsd=Math.max(0,parseInt(e.target.value,10)||0);
   save();e.target.blur();refresh();
 });
 $('#hotelbar').addEventListener('click',e=>{const b=e.target.closest('[data-amen]');if(!b)return;const k=b.dataset.amen;S.amen=S.amen.includes(k)?S.amen.filter(x=>x!==k):[...S.amen,k];save();refresh();});
+function jumpToHotelBar(){
+  setCollapsed(false);showTab('places');
+  const el=$('#hotelbar');if(el.hidden)return;
+  setTimeout(()=>{el.scrollIntoView({block:'start'});el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');},80);
+}
+$('#hotelsBtn').onclick=jumpToHotelBar;
+document.addEventListener('click',e=>{if(e.target.closest('[data-hjump]')){e.stopPropagation();jumpToHotelBar();}},true);
 document.addEventListener('click',e=>{
   const w=e.target.closest('[data-hwrong]');if(!w)return;
   e.stopPropagation();const p=byId(w.dataset.hwrong);if(!p)return;
@@ -1393,9 +1425,10 @@ const openLayers=new Set();let openDot=null;
 /* one box per category, hidden when its category chip is off. Pinned locations come first */
 function renderDots(){
   $('#dots').innerHTML=S.layers.filter(l=>!S.hidden.includes(l.id)).map(l=>{
-    const np=l.items.filter(d=>d.pin).length,items=[...l.items.filter(d=>d.pin),...l.items.filter(d=>!d.pin)];
-    return `<details class="dlayer" data-lid="${l.id}"${openLayers.has(l.id)?' open':''}><summary><span class="dot" style="--c:${l.color}"></span><span class="lname">${esc(l.name)}</span><small>${l.items.length}${np?` · ${np} pinned`:''}</small>${np?`<button class="ponly" data-lponly="${l.id}" aria-pressed="${!!l.pinnedOnly}" title="Show only the pinned ones on the map">Pinned only</button>`:''}<button class="del" data-ldel="${l.id}">Delete</button></summary>
-      ${items.map(d=>{const open=d.id===openDot;return `<div class="dotrow${d.id===selected?' sel':''}${open?' open':''}" data-id="${d.id}"><span class="dot${d.pin?' pin':''}" style="--c:${l.color}"></span><div><b>${esc(d.name)}</b>${d.address?`<div class="mline"><button class="copy" onclick="app.copyAddr('${d.id}',event)" aria-label="Copy address of ${esc(d.name)}" title="Copy address">${COPY_ICON}</button><span>${esc(d.address)}</span></div>`:''}${open?`<div class="dmore">${infoHtml(d.gid,null,`data-dthumb="${d.id}"`)}</div>`:''}</div><div class="dacts"><button class="pbtn" data-dpin="${d.id}" aria-pressed="${!!d.pin}" aria-label="${d.pin?'Unpin':'Pin'} ${esc(d.name)}" title="${d.pin?'Unpin':'Pin to the top'}">${PIN_ICON}</button><button class="xbtn" data-drm="${d.id}" aria-label="Remove ${esc(d.name)}" title="Remove">✕</button></div></div>`;}).join('')}</details>`;
+    const np=l.items.filter(d=>d.pin).length,lodge=lodgeLayer(l);
+    const items=[...l.items.filter(d=>d.pin),...l.items.filter(d=>!d.pin)].filter(d=>amenOk(d));
+    return `<details class="dlayer" data-lid="${l.id}"${openLayers.has(l.id)?' open':''}><summary><span class="dot" style="--c:${l.color}"></span><span class="lname">${esc(l.name)}</span><small>${l.items.length}${np?` · ${np} pinned`:''}${lodge&&hotelFiltering()?` · ${items.length} match`:''}</small>${np?`<button class="ponly" data-lponly="${l.id}" aria-pressed="${!!l.pinnedOnly}" title="Show only the pinned ones on the map">Pinned only</button>`:''}<button class="del" data-ldel="${l.id}">Delete</button></summary>
+      ${items.map(d=>{const open=d.id===openDot;return `<div class="dotrow${d.id===selected?' sel':''}${open?' open':''}" data-id="${d.id}"><span class="dot${d.pin?' pin':''}" style="--c:${l.color}"></span><div><b>${esc(d.name)}</b>${d.address?`<div class="mline"><button class="copy" onclick="app.copyAddr('${d.id}',event)" aria-label="Copy address of ${esc(d.name)}" title="Copy address">${COPY_ICON}</button><span>${esc(d.address)}</span></div>`:''}${lodge&&openLayers.has(l.id)?hotelHtml(d,!open):''}${open?`<div class="dmore">${infoHtml(d.gid,null,`data-dthumb="${d.id}"`)}</div>`:''}</div><div class="dacts"><button class="pbtn" data-dpin="${d.id}" aria-pressed="${!!d.pin}" aria-label="${d.pin?'Unpin':'Pin'} ${esc(d.name)}" title="${d.pin?'Unpin':'Pin to the top'}">${PIN_ICON}</button><button class="xbtn" data-drm="${d.id}" aria-label="Remove ${esc(d.name)}" title="Remove">✕</button></div></div>`;}).join('')}</details>`;
   }).join('');
 }
 $('#dots').addEventListener('toggle',e=>{const d=e.target.closest('details[data-lid]');if(d)d.open?openLayers.add(d.dataset.lid):openLayers.delete(d.dataset.lid);},true);
@@ -1410,7 +1443,7 @@ $('#dots').onclick=e=>{
   if(rm){const l=layerOf(rm.dataset.drm);if(l){l.items=l.items.filter(d=>d.id!==rm.dataset.drm);if(popupPlaceId===rm.dataset.drm)map.closePopup();save();refresh();}return;}
   const th=e.target.closest('[data-dthumb]');
   if(th){const d=byId(th.dataset.dthumb);if(d)openResult({src:d.gid?'g':'osm',id:d.gid,name:d.name,addr:d.address,lat:d.lat,lng:d.lng,types:[]});return;}
-  const row=e.target.closest('.dotrow');if(!row||e.target.closest('button'))return;
+  const row=e.target.closest('.dotrow');if(!row||e.target.closest('button,a'))return;
   const id=row.dataset.id;
   /* tap again to deselect and hide the details */
   if(openDot===id){openDot=null;selected=null;if(popupPlaceId===id)map.closePopup();renderDots();return;}
