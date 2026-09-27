@@ -1489,7 +1489,7 @@ $('#sheet').onclick=e=>{
   if(a==='link')return linkPlace(b.dataset.id);
   if(a==='unlink'){const p=byId(b.dataset.id);if(p)ask({msg:`Unlink ${p.name} from this Google place? Its Google photos and reviews will stop showing until you relink it.`,ok:'Unlink',danger:true}).then(y=>{if(!y)return;delete p.gid;p.gtried=1;save();refresh();closeSheet();toast(`${p.name} unlinked`);});return;}
   if(a==='show'){const id=b.dataset.id;closeSheet();showInList(id);select(id);return;}
-  if(a==='fav'){toggleFav(b.dataset.id);if(sheetCtx){const d=sheetCtx.r.id&&GCACHE[sheetCtx.r.id];renderSheet(d||null);}return;}
+  if(a==='fav'){toggleFav(b.dataset.id);if(sheetCtx){if(sheetCtx.mine&&!S.places.includes(sheetCtx.mine))sheetCtx.mine=null;const d=sheetCtx.r.id&&GCACHE[sheetCtx.r.id];renderSheet(d||null);}return;}
   if(a==='add'){
     const {r}=sheetCtx,d=r.id&&GCACHE[r.id],cat=$('#sheetCat').value;
     const np={id:uid(),cat,name:d?.displayName?.text||r.name,lat:d?.location?.latitude??r.lat,lng:d?.location?.longitude??r.lng,address:d?.formattedAddress||r.addr||'',notes:d?.editorialSummary?.text||'',status:'want',photos:[],gid:r.src==='g'?r.id:undefined};
@@ -1637,13 +1637,27 @@ function hotelSummary(list){
 }
 const allLodging=()=>[...S.layers.filter(l=>!S.hidden.includes(l.id)&&lodgeLayer(l)).flatMap(l=>l.items)];
 const STAR_ICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.3 5.4 5.7.6-4.3 3.9 1.3 5.8L12 15.8l-5 2.9 1.3-5.8L4 9l5.7-.6z"/></svg>';
-function favHotel(o){
+function favHotel(o,quiet){
   let p=S.places.find(x=>(o.gid&&x.gid===o.gid)||(Math.abs(x.lat-o.lat)<1e-5&&Math.abs(x.lng-o.lng)<1e-5));
-  if(!p){p={id:uid(),cat:CATS.housing?'housing':'other',name:o.name,lat:o.lat,lng:o.lng,address:o.address||'',notes:'',status:'want',photos:[],...(o.gid?{gid:o.gid}:{}),...(o.rk?{rk:o.rk}:{})};S.places.push(p);}
+  const l=o.dotId&&layerOf(o.dotId),dot=l&&l.items.find(d=>d.id===o.dotId);
+  if(!p){p={id:uid(),cat:CATS.housing?'housing':'other',name:o.name,lat:o.lat,lng:o.lng,address:o.address||'',notes:'',status:'want',photos:[],...(o.gid?{gid:o.gid}:{}),...(o.rk?{rk:o.rk}:{})};S.places.push(p);
+    /* remember where it came from, so unfavoriting puts it back */
+    if(dot)p.fromDot={lid:l.id,d:{...dot,fav:false}};}
   p.fav=true;S.hidden=S.hidden.filter(c=>c!==p.cat);
-  if(o.dotId){const l=layerOf(o.dotId);if(l)l.items=l.items.filter(d=>d.id!==o.dotId);if(popupPlaceId===o.dotId)map.closePopup();}
-  save();refresh();toast(`${p.name} added to Housing as a favorite`);return p;
+  if(dot){l.items=l.items.filter(d=>d.id!==o.dotId);if(popupPlaceId===o.dotId)map.closePopup();}
+  if(!quiet){save();refresh();toast(`${p.name} added to Housing as a favorite`);}return p;
 }
+/* unfavoriting a hotel that came from a search category moves it back there */
+function unfavHotel(p){
+  const l=S.layers.find(x=>x.id===p.fromDot.lid);
+  if(!l||p.id===S.homeId){p.fav=false;delete p.fromDot;return;}
+  const d={...p.fromDot.d,name:p.name};
+  if(!l.items.some(x=>x.id===d.id))l.items.push(d);
+  p.fav=false;S.places=S.places.filter(x=>x!==p);detach(p.id);
+  if(popupPlaceId===p.id)map.closePopup();if(selected===p.id)selected=null;
+}
+/* hotels favorited from their map or details card before this existed */
+function settleHotelFavs(){S.layers.forEach(l=>{if(lodgeLayer(l))l.items.filter(d=>d.fav).forEach(d=>favHotel({...d,dotId:d.id},true));});}
 const lodgingShown=()=>!S.hidden.includes('housing')||!S.hidden.includes('onsen')||S.layers.some(l=>!S.hidden.includes(l.id)&&lodgeLayer(l));
 function renderHotelBar(){
   const el=$('#hotelbar');
@@ -1889,7 +1903,13 @@ $('#lightbox').onclick=e=>{if(e.target.id==='lightbox')closeLightbox();};
 document.addEventListener('keydown',e=>{if($('#lightbox').hidden)return;if(e.key==='Escape')closeLightbox();if(e.key==='ArrowLeft')$('#lbPrev').click();if(e.key==='ArrowRight')$('#lbNext').click();});
 
 /* ---------- grouping: favorites within a 20-minute walk ---------- */
-function toggleFav(id){const p=byId(id);if(!p)return;p.fav=!p.fav;save();refresh();toast(p.fav?`${p.name} favorited`:`${p.name} removed from favorites`);}
+function toggleFav(id){
+  const p=byId(id);if(!p)return;
+  /* a hotel from a search category joins Hotels (Housing) when favorited, from anywhere */
+  if(String(id).startsWith('d_')&&!p.fav&&lodgeLayer(layerOf(id)))return favHotel({...p,dotId:id});
+  if(p.fav&&p.fromDot)unfavHotel(p);else p.fav=!p.fav;
+  save();refresh();toast(p.fav?`${p.name} favorited`:`${p.name} removed from favorites`);
+}
 const WALK_GROUP_MIN=20;
 function favGroups(){
   const favs=S.places.filter(p=>p.fav);
@@ -2367,7 +2387,7 @@ function refresh(){rebuildCats();S.days.forEach(normalizeDay);renderHome();rende
   $('#panel header').addEventListener('click',()=>{if(document.body.classList.contains('collapsed'))setCollapsed(false);setCatOpen(false);});
   $('#panel .grab').addEventListener('click',()=>{if(document.body.classList.contains('collapsed'))setCollapsed(false);setCatOpen(false);});
 })();
-placeCatbar();save();refresh();syncRouteBtn();fillAddresses();
+settleHotelFavs();placeCatbar();save();refresh();syncRouteBtn();fillAddresses();
 </script>
 </body>
 </html>
