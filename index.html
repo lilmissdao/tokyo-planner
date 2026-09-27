@@ -38,6 +38,7 @@ nav.tabs .count{display:inline-grid;place-items:center;min-width:18px;height:18p
 .av{--c:#888;--s:32px;width:var(--s);height:var(--s);border-radius:50%;background:var(--c);display:grid;place-items:center;flex:none;box-shadow:0 0 0 2px #fff,0 1px 3px rgba(28,34,48,.35)}
 .av svg{width:62%;height:62%;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .av.anchor{border-radius:9px}
+.av .emo{font-size:calc(var(--s) * .56);line-height:1;font-weight:400;font-style:normal}
 .chips{display:grid;grid-template-columns:repeat(5,1fr);gap:8px 4px;margin-bottom:14px}
 .chip{display:flex;flex-direction:column;align-items:center;gap:5px;border:0;background:none;padding:4px 0;font-size:11px;font-weight:700;color:var(--ink-2)}
 .chip .av{--s:40px}
@@ -196,6 +197,9 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
 .cegrid .sw{width:30px;height:30px;border-radius:50%;background:var(--c)}
 .cecustom{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--ink-2)}
 .dlgbox .cecustom input{width:44px;height:30px;padding:0 2px}
+.dlgbox .cecustom input[data-ce="emoji"]{width:56px;height:38px;text-align:center;font-size:22px}
+.ceai{display:grid;gap:8px;justify-items:start}
+.ceerr{font-size:13px;color:#C4001A;font-weight:700}
 .dlgpick button{text-align:left;border:1.5px solid var(--rule);background:#fff;border-radius:10px;padding:9px 11px;font-size:14px;font-weight:700}
 .dlgpick button small{display:block;font-weight:500;color:var(--ink-3);font-size:12px}
 .lightbox{position:fixed;inset:0;z-index:2000;background:rgba(15,18,26,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:12px}
@@ -586,7 +590,7 @@ const CATS={};
 function rebuildCats(){
   const c=S.cats,all={};
   for(const k in BASE_CATS)if(k==='other'||!c.deleted.includes(k))all[k]={...BASE_CATS[k],icon:k,...(c.edit[k]||{})};
-  c.custom.forEach(x=>{all[x.key]={label:x.label,color:x.color,icon:x.icon};});
+  c.custom.forEach(x=>{all[x.key]={label:x.label,color:x.color,icon:x.icon,svg:x.svg,emoji:x.emoji};});
   for(const k in CATS)delete CATS[k];
   c.order.filter(k=>all[k]).forEach(k=>CATS[k]=all[k]);
   for(const k in all)CATS[k]??=all[k];
@@ -600,7 +604,9 @@ function catOrder(){
   all.forEach(k=>{if(!o.includes(k))o.push(k);});
   return o;
 }
-const av=(cat,size)=>{const c=CATS[cat]||CATS.other;return `<span class="av${cat==='anchor'?' anchor':''}" style="--c:${c.color}${size?';--s:'+size+'px':''}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[c.icon]||ICONS.other}</svg></span>`};
+/* a category's picture: your emoji, an AI-drawn icon, or one from the set */
+const glyph=c=>c.emoji?`<b class="emo" aria-hidden="true">${esc(c.emoji)}</b>`:`<svg viewBox="0 0 24 24" aria-hidden="true">${c.svg||ICONS[c.icon]||ICONS.other}</svg>`;
+const av=(cat,size)=>{const c=CATS[cat]||CATS.other;return `<span class="av${cat==='anchor'?' anchor':''}" style="--c:${c.color}${size?';--s:'+size+'px':''}">${glyph(c)}</span>`};
 const STATIONS=[
  ['Tokyo',35.6812,139.7671,'JR lines, Shinkansen, Marunouchi'],
  ['Bus Terminal Tokyo Yaesu',35.6791,139.7687,'Highway buses incl. Mt. Fuji / Kawaguchiko'],
@@ -1181,7 +1187,7 @@ function toggleCat(k){
   S.hidden=hide?[...S.hidden,k]:S.hidden.filter(x=>x!==k);
   save();refresh();
 }
-const layerAv=(l,size)=>`<span class="av" style="--c:${l.color};--s:${size}px"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[l.icon||'dot']||ICONS.dot}</svg></span>`;
+const layerAv=(l,size)=>`<span class="av" style="--c:${l.color};--s:${size}px">${glyph({icon:l.icon||'dot',svg:l.svg,emoji:l.emoji})}</span>`;
 function toggleLayer(id){const l=S.layers.find(x=>x.id===id);if(!l)return;const hide=!S.hidden.includes(id);S.hidden=hide?[...S.hidden,id]:S.hidden.filter(x=>x!==id);save();refresh();}
 function favAv(size,on){return `<span class="av" style="--c:#E8B100;--s:${size}px"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.3 5.4 5.7.6-4.3 3.9 1.3 5.8L12 15.8l-5 2.9 1.3-5.8L4 9l5.7-.6z"/></svg></span>`;}
 $('#chips').onclick=e=>{
@@ -2177,7 +2183,22 @@ document.querySelector('.chipsbar').onclick=e=>{
 const PALETTE=['#EC4899','#E4007F','#AD1457','#E60012','#D84315','#FF7043','#F39700','#E8B100','#AFB42B','#558B2F','#009944','#00ADA9','#00A7DB','#1E88E5','#3949AB','#1F3A93','#5E35B1','#7B1FA2','#9B7CB6','#BB641D','#6D4C41','#546E7A','#9CAEB7','#1C2230'];
 let ceOpen=null;
 const ceLayer=k=>S.layers.find(l=>l.id===k);
-const ceInfo=k=>{const l=ceLayer(k);return l?{label:l.name,color:l.color,icon:l.icon||'dot',n:l.items.length,l}:{...CATS[k],n:S.places.filter(p=>p.cat===k).length};};
+const ceInfo=k=>{const l=ceLayer(k);return l?{label:l.name,color:l.color,icon:l.icon||'dot',svg:l.svg,emoji:l.emoji,n:l.items.length,l}:{...CATS[k],n:S.places.filter(p=>p.cat===k).length};};
+let aiRes=null;
+const aiHtml=(k,c)=>{const a=aiRes&&aiRes.k===k?aiRes:null;
+  return `<div class="ceai"><button type="button" class="btn small" data-ce="ai"${a?.loading?' disabled':''}>${a?.loading?'Drawing icons…':a?.icons?'✨ Try again':'✨ Make an icon with AI'}</button>
+  ${a?.err?`<span class="ceerr">${esc(a.err)}</span>`:''}
+  ${a?.icons?`<div class="cegrid">${a.icons.map((sv,i)=>`<button type="button" data-aisvg="${i}" aria-pressed="${c.svg===sv&&!c.emoji}" aria-label="AI icon ${i+1}"><span class="av" style="--c:${c.color};--s:40px"><svg viewBox="0 0 24 24" aria-hidden="true">${sv}</svg></span></button>`).join('')}</div>`:''}</div>
+  <label class="cecustom"><input data-ce="emoji" value="${esc(c.emoji||'')}" placeholder="🙂" aria-label="Emoji" autocomplete="off">Or type any emoji</label>`;};
+async function aiIcons(k){
+  const name=ceInfo(k).label;aiRes={k,loading:true};renderCatEd();
+  try{
+    const r=await fetch('/api/icon?name='+encodeURIComponent(name));const j=await r.json().catch(()=>({}));
+    if(aiRes?.k!==k)return;
+    aiRes=r.ok&&j.icons?.length?{k,icons:j.icons}:{k,err:j.error==='not_configured'?'AI icons are not switched on yet.':r.status===429?'Too many tries. Wait a bit and try again.':'Could not draw icons. Try again.'};
+  }catch(e){if(aiRes?.k===k)aiRes={k,err:'No connection. Try again.'};}
+  if(ceOpen===k)renderCatEd();
+}
 function renderCatEd(){
   const o=catOrder();
   $('#catEdList').innerHTML=o.map((k,i)=>{const c=ceInfo(k);
@@ -2188,28 +2209,30 @@ function renderCatEd(){
       <button type="button" data-ce="up"${i?'':' disabled'} aria-label="Move ${esc(c.label)} up">↑</button>
       <button type="button" data-ce="down"${i<o.length-1?'':' disabled'} aria-label="Move ${esc(c.label)} down">↓</button>
       ${k==='other'?'<span></span>':`<button type="button" class="cex" data-ce="del" aria-label="Delete ${esc(c.label)}">✕</button>`}
-      ${ceOpen===k?`<div class="cestyle"><b>Icon</b><div class="cegrid">${Object.keys(ICONS).map(ic=>`<button type="button" data-icon="${ic}" aria-pressed="${ic===c.icon}" aria-label="Icon ${ic}"><span class="av" style="--c:${c.color};--s:32px"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[ic]}</svg></span></button>`).join('')}</div>
+      ${ceOpen===k?`<div class="cestyle"><b>Your own icon</b>${aiHtml(k,c)}<b>Or pick one</b><div class="cegrid">${Object.keys(ICONS).map(ic=>`<button type="button" data-icon="${ic}" aria-pressed="${ic===c.icon&&!c.svg&&!c.emoji}" aria-label="Icon ${ic}"><span class="av" style="--c:${c.color};--s:32px"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[ic]}</svg></span></button>`).join('')}</div>
         <b>Color</b><div class="cegrid">${PALETTE.map(col=>`<button type="button" data-color="${col}" aria-pressed="${col.toUpperCase()===c.color.toUpperCase()}" aria-label="Color ${col}"><span class="sw" style="--c:${col}"></span></button>`).join('')}</div>
         <label class="cecustom"><input type="color" data-ce="color" value="${c.color}">Any other color</label></div>`:''}
     </div>`;}).join('');
 }
 function setCat(k,patch){
   const l=ceLayer(k);
-  if(l){if(patch.label!=null)l.name=patch.label;if(patch.color)l.color=patch.color;if(patch.icon){if(patch.icon==='dot')delete l.icon;else l.icon=patch.icon;}}
+  if(l){const {label,...rest}=patch;if(label!=null)l.name=label;Object.assign(l,rest);}
   else{const cu=S.cats.custom.find(x=>x.key===k);if(cu)Object.assign(cu,patch);else S.cats.edit[k]={...(S.cats.edit[k]||{}),...patch};}
   save();refresh();
 }
-function openCatEd(){ceOpen=null;renderCatEd();$('#catEd').hidden=false;}
+function openCatEd(){ceOpen=null;aiRes=null;renderCatEd();$('#catEd').hidden=false;}
 function closeCatEd(){document.activeElement?.blur?.();$('#catEd').hidden=true;ceOpen=null;}
 $('#catEdDone').onclick=closeCatEd;
 $('#catEd').onclick=e=>{
   if(e.target.id==='catEd')return closeCatEd();
   const row=e.target.closest('.cerow');if(!row)return;const k=row.dataset.k;
-  const ic=e.target.closest('[data-icon]');if(ic){setCat(k,{icon:ic.dataset.icon});return renderCatEd();}
+  const ic=e.target.closest('[data-icon]');if(ic){setCat(k,{icon:ic.dataset.icon,svg:null,emoji:null});return renderCatEd();}
+  const as=e.target.closest('[data-aisvg]');if(as&&aiRes?.icons){setCat(k,{svg:aiRes.icons[+as.dataset.aisvg],emoji:null});return renderCatEd();}
   const co=e.target.closest('[data-color]');if(co){setCat(k,{color:co.dataset.color});return renderCatEd();}
   const b=e.target.closest('button[data-ce]');if(!b)return;
   const act=b.dataset.ce;
   if(act==='style'){ceOpen=ceOpen===k?null:k;return renderCatEd();}
+  if(act==='ai')return aiIcons(k);
   if(act==='up'||act==='down'){
     const o=catOrder(),i=o.indexOf(k),j=act==='up'?i-1:i+1;if(j<0||j>=o.length)return;
     [o[i],o[j]]=[o[j],o[i]];S.cats.order=o;save();refresh();renderCatEd();
@@ -2230,11 +2253,18 @@ $('#catEd').onclick=e=>{
 $('#catEd').addEventListener('change',e=>{
   const row=e.target.closest('.cerow');if(!row)return;const k=row.dataset.k;
   if(e.target.dataset.ce==='name'){const v=e.target.value.trim();if(!v){e.target.value=ceInfo(k).label;return;}setCat(k,{label:v});}
+  /* update in place: re-drawing here would swallow the tap that moved focus away */
+  if(e.target.dataset.ce==='emoji'){const v=firstEmoji(e.target.value);setCat(k,v?{emoji:v}:{emoji:null});e.target.value=v;const c=ceInfo(k);row.querySelector('.ceicon').innerHTML=c.l?layerAv(c.l,36):av(k,36);row.querySelectorAll('[data-icon],[data-aisvg]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.icon?String(!v&&x.dataset.icon===c.icon&&!c.svg):String(!v&&aiRes?.icons?.[+x.dataset.aisvg]===c.svg)));}
   if(e.target.dataset.ce==='color'){setCat(k,{color:e.target.value.toUpperCase()});renderCatEd();}
 });
 $('#catEd').addEventListener('keydown',e=>{
   if(e.key==='Enter'&&e.target.dataset.ce==='name'){e.preventDefault();e.target.blur();}
   if(e.key==='Escape'&&$('#dlg').hidden)closeCatEd();
+});
+const firstEmoji=v=>{v=v.trim();if(!v)return '';const g=window.Intl?.Segmenter?[...new Intl.Segmenter().segment(v)].map(x=>x.segment):Array.from(v);return g[0];};
+$('#catEd').addEventListener('input',e=>{
+  if(e.target.dataset.ce!=='emoji')return;const v=firstEmoji(e.target.value);
+  if(v&&/\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(v)){const k=e.target.closest('.cerow').dataset.k;setCat(k,{emoji:v});const a=e.target.closest('.cerow').querySelector('.ceicon');a.innerHTML=ceInfo(k).l?layerAv(ceInfo(k).l,36):av(k,36);}
 });
 $('#catEdNew').onclick=()=>{
   const key='c_'+uid();
