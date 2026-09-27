@@ -2186,7 +2186,7 @@ const ceLayer=k=>S.layers.find(l=>l.id===k);
 const ceInfo=k=>{const l=ceLayer(k);return l?{label:l.name,color:l.color,icon:l.icon||'dot',svg:l.svg,emoji:l.emoji,n:l.items.length,l}:{...CATS[k],n:S.places.filter(p=>p.cat===k).length};};
 let aiRes=null;
 const aiHtml=(k,c)=>{const a=aiRes&&aiRes.k===k?aiRes:null;
-  return `<div class="ceai"><button type="button" class="btn small" data-ce="ai"${a?.loading?' disabled':''}>${a?.loading?'Drawing icons…':a?.icons?'✨ Try again':'✨ Make an icon with AI'}</button>
+  return `<div class="ceai"><button type="button" class="btn small" data-ce="ai"${a?.loading?' disabled':''}>${a?.loading?'Drawing icons… about 20 seconds':a?.icons?'✨ Try again':'✨ Make an icon with AI'}</button>
   ${a?.err?`<span class="ceerr">${esc(a.err)}</span>`:''}
   ${a?.icons?`<div class="cegrid">${a.icons.map((sv,i)=>`<button type="button" data-aisvg="${i}" aria-pressed="${c.svg===sv&&!c.emoji}" aria-label="AI icon ${i+1}"><span class="av" style="--c:${c.color};--s:40px"><svg viewBox="0 0 24 24" aria-hidden="true">${sv}</svg></span></button>`).join('')}</div>`:''}</div>
   <label class="cecustom"><input data-ce="emoji" value="${esc(c.emoji||'')}" placeholder="🙂" aria-label="Emoji" autocomplete="off">Or type any emoji</label>`;};
