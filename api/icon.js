@@ -22,14 +22,14 @@ Style: a 24x24 viewBox line icon like Lucide or Feather. White strokes, stroke-w
 Reply with only the 4 icons, one per line, each as <svg viewBox="0 0 24 24">...</svg> using only path, circle, rect, line, polyline, polygon or ellipse. No other text.`;
 async function draw(name){
   const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':process.env.ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01'},
-    body:JSON.stringify({model:'claude-sonnet-5',max_tokens:2000,messages:[{role:'user',content:PROMPT(name)}]})});
+    body:JSON.stringify({model:'claude-sonnet-5',max_tokens:4000,thinking:{type:'disabled'},messages:[{role:'user',content:PROMPT(name)}]})});
   if(!r.ok){const t=await r.text().catch(()=>'');throw new Error(`ai ${r.status} ${t.slice(0,200)}`);}
   const j=await r.json(),text=(j.content||[]).map(c=>c.text||'').join('').replace(/\\"/g,'"');
   /* one icon per <svg>; if the wrappers are missing, treat each line as one icon */
   let list=text.match(/<svg[\s\S]*?<\/svg>/gi)||[];
   if(!list.length)list=text.split(/\n/);
   const icons=list.map(clean).filter(Boolean).slice(0,4);
-  if(!icons.length)throw new Error('no_icons '+JSON.stringify(text.slice(0,200)));
+  if(!icons.length)throw new Error(`no_icons stop=${j.stop_reason} blocks=${(j.content||[]).map(c=>c.type).join(',')} `+JSON.stringify(text.slice(0,200)));
   return icons;
 }
 module.exports=async(req,res)=>{
