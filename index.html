@@ -485,6 +485,7 @@ body.collapsed .totop,body.collapsed #panel>.catbar{display:none}
   <div class="maptools">
     <button id="tglStations" aria-pressed="true">Stations</button>
     <button id="fitAll">Show all</button>
+    <button id="tglRoute" aria-pressed="true" title="Show or hide the day's route on the map">Hide route</button>
   </div>
   <div class="legend" id="legend" aria-label="Show or hide categories"></div>
   <div class="gsearch">
@@ -2037,6 +2038,12 @@ window.app={
 $('#q').oninput=()=>{$('#qx').hidden=!$('#q').value;renderList();};
 $('#qx').onclick=()=>{$('#q').value='';$('#qx').hidden=true;renderList();$('#q').focus();};
 $('#tglStations').onclick=e=>{const on=map.hasLayer(stationLayer);on?map.removeLayer(stationLayer):map.addLayer(stationLayer);e.currentTarget.setAttribute('aria-pressed',!on);};
+/* show or hide the day's route lines on the map; showing it again zooms to fit the route */
+function syncRouteBtn(){const on=!S.routeOff;const b=$('#tglRoute');b.setAttribute('aria-pressed',on);b.textContent=on?'Hide route':'Show route';if(on&&!map.hasLayer(routeLayer))map.addLayer(routeLayer);if(!on&&map.hasLayer(routeLayer))map.removeLayer(routeLayer);}
+$('#tglRoute').onclick=()=>{
+  S.routeOff=!S.routeOff;save();syncRouteBtn();
+  if(!S.routeOff){const pts=routeStops().map(({p})=>[p.lat,p.lng]);if(pts.length>1)map.fitBounds(pts,{padding:[50,50]});else if(pts.length)map.setView(pts[0],15);}
+};
 $('#fitAll').onclick=()=>{const pts=S.places.filter(visible).map(p=>[p.lat,p.lng]);if(pts.length)map.fitBounds(pts,{padding:[40,40]});};
 
 /* ---------- backup (with photos) ---------- */
@@ -2183,7 +2190,7 @@ function refresh(){S.days.forEach(normalizeDay);renderHome();renderChips();rende
   /* when the dashboard is hidden on a phone, tapping its title bar brings it back */
   $('#panel header').addEventListener('click',()=>{if(document.body.classList.contains('collapsed'))setCollapsed(false);});
 })();
-placeCatbar();save();refresh();fillAddresses();
+placeCatbar();save();refresh();syncRouteBtn();fillAddresses();
 </script>
 </body>
 </html>
