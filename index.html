@@ -23,17 +23,18 @@ button{cursor:pointer}
 .resizer{position:absolute;top:0;right:-5px;width:10px;height:100%;cursor:col-resize;z-index:700;touch-action:none}
 .resizer::after{content:"";position:absolute;left:4px;top:50%;width:2px;height:44px;margin-top:-22px;border-radius:2px;background:#C9CED6;opacity:0;transition:opacity .15s}
 .resizer:hover::after,.resizer.drag::after{opacity:1}
-header{padding:18px 20px 12px;display:flex;align-items:baseline;justify-content:space-between;gap:12px}
-header h1{margin:0;font-weight:900;font-size:26px;letter-spacing:-.01em;line-height:1}
+header{padding:12px 20px 8px;display:flex;align-items:center;justify-content:flex-start;gap:12px}
+header h1{display:none}
 header h1 small{display:block;font-weight:500;font-size:13px;color:var(--ink-3);letter-spacing:0;margin-top:6px}
-.home-pill{font-size:12px;color:var(--ink-2);text-align:right;max-width:170px;line-height:1.3}
-.home-pill b{display:block;color:var(--ink);font-weight:700}
+.home-pill{font-size:13px;color:var(--ink-2);text-align:left;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.home-pill span::after{content:":"}
+.home-pill b{display:inline;margin-left:5px;color:var(--ink);font-weight:700}
 .pin.home .av{background:#E8B100}
 nav.tabs{display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--rule)}
 nav.tabs button{border:0;background:none;padding:10px 10px 12px;font-weight:700;font-size:15px;color:var(--ink-3);border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
 nav.tabs button[aria-selected="true"]{color:var(--ink);border-color:var(--ink)}
 nav.tabs .count{display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:9px;background:var(--line);color:#fff;font-size:11px;margin-left:4px;padding:0 5px;vertical-align:1px}
-.tabpane{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:14px 18px 28px;overscroll-behavior:contain}
+.tabpane{--pl:18px;--pr:18px;flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:14px var(--pr) 28px var(--pl);overscroll-behavior:contain}
 .tabpane[hidden]{display:none}
 .av{--c:#888;--s:32px;width:var(--s);height:var(--s);border-radius:50%;background:var(--c);display:grid;place-items:center;flex:none;box-shadow:0 0 0 2px #fff,0 1px 3px rgba(28,34,48,.35)}
 .av svg{width:62%;height:62%;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -162,6 +163,8 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
 .maptools button{background:#fff;border:1.5px solid var(--rule);border-radius:8px;padding:7px 10px;font-weight:700;font-size:13px;box-shadow:0 1px 2px rgba(28,34,48,.12)}
 .maptools button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
 .legend{position:absolute;left:12px;bottom:calc(22px + env(safe-area-inset-bottom,0px));z-index:500;display:flex;gap:6px;background:rgba(255,255,255,.94);border:1.5px solid var(--rule);border-radius:999px;padding:6px 8px;max-width:calc(100% - 80px);overflow-x:auto;box-shadow:0 1px 3px rgba(28,34,48,.15)}
+/* same as phones: the categories bar in the list is the one place to switch them */
+.legend{display:none!important}
 .legend button{border:0;background:none;padding:0;border-radius:50%}
 .legend .av{--s:30px;box-shadow:none}
 .legend button[aria-pressed="false"] .av{background:#C9CED6}
@@ -368,7 +371,6 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
 .mini .htag{font-size:10.5px;padding:0 6px}
 .mini .hprice b{font-size:12.5px}
 .chipsbar{display:flex;align-items:center;gap:6px;margin:-2px 0 8px;font-size:12px;color:var(--ink-3);font-weight:700}
-.chipsbar [data-expand]{display:none}
 .strack{display:none}
 @media (max-width:820px){
   .strack{display:block;position:absolute;right:3px;width:28px;z-index:30;pointer-events:none}
@@ -387,24 +389,23 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
 #q::-webkit-search-cancel-button{display:none}
 nav.tabs{overflow-x:auto;scrollbar-width:none}
 nav.tabs::-webkit-scrollbar{display:none}
-/* phones: categories sit at the top of the Places list, one sliding row that stays pinned while you scroll; Expand shows every icon and the list carries on below */
-@media (max-width:820px){
-  /* sticky spots respect the list's padding, so pull it back to the very top and edges */
-  .catbar{position:sticky;top:-14px;z-index:20;margin:-14px -38px 10px -20px;border-bottom:1px solid var(--rule);background:var(--paper);padding:8px 38px 6px 20px;box-shadow:none}
-  .catbar.open{position:static}
-  .chipsbar [data-expand]{display:inline-block}
-  .catbar .chipsbar{margin:0 0 4px}
-  .catbar .chipsbar span{margin-right:auto}
-  .catbar .chips{display:flex;grid-template-columns:none;gap:2px;margin:0;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-  .catbar .chips::-webkit-scrollbar{display:none}
-  .catbar .chip{flex:none;width:62px;padding:2px 0;font-size:10.5px;gap:3px;scroll-snap-align:start}
-  .catbar .chip .av{--s:34px}
-  .catbar .chip span{white-space:nowrap;max-width:60px;overflow:hidden;text-overflow:ellipsis;text-align:center;line-height:1.2}
-  .catbar .chip small{display:none}
-  .catbar.open .chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:6px 2px;overflow:visible}
-  .catbar.open .chip{width:auto}
-  .catbar.open .chip small{display:inline}
-}
+/* categories: one sliding row pinned at the top of the Places list; Expand shows every icon and the list carries on below */
+/* sticky spots respect the list's padding, so pull it back to the very top and edges */
+.catbar{position:sticky;top:-14px;z-index:20;margin:-14px calc(-1 * var(--pr)) 10px calc(-1 * var(--pl));border-bottom:1px solid var(--rule);background:var(--paper);padding:8px var(--pr) 6px var(--pl);box-shadow:none}
+.catbar.open{position:static}
+.chipsbar [data-expand]{display:inline-block}
+.catbar .chipsbar{margin:0 0 4px}
+.catbar .chipsbar span{margin-right:auto}
+.catbar .chips{display:flex;grid-template-columns:none;gap:2px;margin:0;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.catbar .chips::-webkit-scrollbar{display:none}
+.catbar .chip{flex:none;width:62px;padding:2px 0;font-size:10.5px;gap:3px;scroll-snap-align:start}
+.catbar .chip .av{--s:34px}
+.catbar .chip span{white-space:nowrap;max-width:60px;overflow:hidden;text-overflow:ellipsis;text-align:center;line-height:1.2}
+.catbar .chip small{display:none}
+.catbar.open .chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:6px 2px;overflow:visible}
+.catbar.open .chip{width:auto}
+.catbar.open .chip small{display:inline}
+
 .chipsbar span{margin-right:auto;text-transform:uppercase;letter-spacing:.04em;font-size:11px}
 .chipsbar button{border:1.5px solid var(--rule);background:#fff;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;color:var(--ink-2)}
 .chipsbar button:hover{border-color:var(--ink);color:var(--ink)}
@@ -448,7 +449,7 @@ body.collapsed .totop,body.collapsed #panel>.catbar{display:none}
   .home-pill b{display:inline;margin-left:5px}
   nav.tabs{padding:0 8px}
   nav.tabs button{font-size:14px;padding:9px 6px 11px}
-  .tabpane{padding:14px 38px 28px 20px}
+  .tabpane{--pl:20px;--pr:38px}
   .legend{bottom:10px}
 }
 @media (max-width:820px){
@@ -1175,7 +1176,7 @@ function renderChips(){
     return `<button class="chip" data-cat="${k}" aria-pressed="${!S.hidden.includes(k)}" title="Show or hide ${esc(c.label)}">${av(k)}<span>${esc(c.label)} <small>${n}</small></span></button>`;
   }).join('');
   const fc=$('#favCount');fc.hidden=!nf;fc.textContent=nf;
-  $('#legend').innerHTML=order.map(k=>{const l=lay(k);
+  $('#legend').innerHTML=barOrder.map(k=>{const l=lay(k);
     if(l)return `<button data-layer="${l.id}" aria-pressed="${!S.hidden.includes(l.id)}" aria-label="${S.hidden.includes(l.id)?'Show':'Hide'} ${esc(l.name)}" title="${esc(l.name)}">${layerAv(l,30)}</button>`;
     const c=CATS[k];return `<button data-cat="${k}" aria-pressed="${!S.hidden.includes(k)}" aria-label="${S.hidden.includes(k)?'Show':'Hide'} ${esc(c.label)}" title="${esc(c.label)}">${av(k,30)}</button>`;}).join('');
 }
@@ -1717,7 +1718,7 @@ function renderList(){
        <div class="stn">${esc(homeText(p))}</div>
        ${LODGE(p)?hotelHtml(p):''}
        ${on?`<div class="ontrip">On ${esc(tl)}</div>`:''}
-       <div class="note editable${p.notes?'':' empty-bio'}" data-edit="notes" data-id="${p.id}" title="Double-click to edit the bio">${p.notes?esc(p.notes):TOUCH()?'Tap to add a short bio':'Double-click to add a short bio'}</div>
+       <div class="note editable${p.notes?'':' empty-bio'}" data-edit="notes" data-id="${p.id}" title="Click to edit the bio">${p.notes?esc(p.notes):TOUCH()?'Tap to add a short bio':'Click to add a short bio'}</div>
        ${p.photos.length?`<div class="thumbs">${p.photos.map((pid,i)=>`<img data-photo="${pid}" data-lb="${p.id}" data-i="${i}" alt="Photo ${i+1} of ${esc(p.name)}">`).join('')}</div>`:''}
        ${gblockHtml(p)}
      </div>
@@ -1803,7 +1804,7 @@ $('#list').addEventListener('paste',e=>{const el=e.target.closest('[contentedita
 function TOUCH(){return matchMedia('(hover: none)').matches;}
 $('#list').onclick=e=>{
   if(e.target.closest('[contenteditable="true"],.menu label,.menu select'))return;
-  const bio=TOUCH()&&!openMenu&&e.target.closest('[data-edit="notes"]');if(bio){startEdit(bio);return;}
+  const bio=!openMenu&&e.target.closest('[data-edit="notes"]');if(bio){startEdit(bio);return;}
   const img=e.target.closest('img[data-lb]');if(img)return app.lightbox(img.dataset.lb,+img.dataset.i);
   const b=e.target.closest('[data-act]');
   if(!b){
@@ -2157,10 +2158,11 @@ $('#fitAll').onclick=()=>{const pts=S.places.filter(visible).map(p=>[p.lat,p.lng
 /* select or deselect every category, including Favorites and your added categories */
 function placeCatbar(){
   const bar=$('#catbar'),home=$('#tab-places');
-  if(!phone())setCatOpen(false);
   if(home.firstElementChild!==bar)home.insertBefore(bar,home.firstChild);
 }
 matchMedia('(max-width:820px)').addEventListener('change',()=>placeCatbar());
+/* computer mouse: the scroll wheel slides the one-row category bar sideways */
+$('#chips').addEventListener('wheel',e=>{const c=$('#chips');if($('#catbar').classList.contains('open')||c.scrollWidth<=c.clientWidth||Math.abs(e.deltaX)>Math.abs(e.deltaY))return;e.preventDefault();c.scrollLeft+=e.deltaY;},{passive:false});
 function setCatOpen(o){
   $('#catbar').classList.toggle('open',o);
   const b=$('#expBtn');b.textContent=o?'Collapse':'Expand';b.setAttribute('aria-expanded',o);
