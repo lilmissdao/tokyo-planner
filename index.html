@@ -207,7 +207,7 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
 .stars{color:#D69200;font-weight:900}
 .sheet{position:absolute;z-index:1050!important;left:12px;top:calc(64px + env(safe-area-inset-top,0px));bottom:14px;width:min(390px,calc(100% - 24px));z-index:660;background:#fff;border-radius:16px;box-shadow:0 14px 36px rgba(28,34,48,.25);overflow:auto;display:flex;flex-direction:column}
 .sheet[hidden]{display:none}
-.sheet .x{position:absolute;right:10px;top:10px;z-index:2;width:32px;height:32px;border-radius:50%;border:0;background:rgba(255,255,255,.95);box-shadow:0 1px 4px rgba(0,0,0,.25);font-size:15px}
+.sheet .x{position:sticky;top:10px;align-self:flex-end;margin:10px 10px -42px 0;flex:none;z-index:3;width:32px;height:32px;border-radius:50%;border:0;background:rgba(255,255,255,.95);box-shadow:0 1px 4px rgba(0,0,0,.25);font-size:15px}
 .sheet .gal{display:flex;gap:3px;overflow-x:auto;scroll-snap-type:x mandatory;flex:none;background:var(--wash)}
 .sheet .gal img{height:190px;width:260px;flex:none;object-fit:cover;scroll-snap-align:start}
 .sheet .body{padding:14px 16px 8px;flex:1}
@@ -224,6 +224,8 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
 .review p{margin:4px 0 0;color:var(--ink-2);white-space:pre-wrap}
 .credit{font-size:11px;color:var(--ink-3);margin-top:4px}
 .sheet .addbar{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--rule);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sheet .addbar .shtop{margin-left:auto;flex:none;width:36px;height:36px;border-radius:50%;border:0;background:var(--ink);color:#fff;display:grid;place-items:center;padding:0}
+.sheet .addbar .shtop svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
 .sheet .addbar select{border:1.5px solid var(--rule);border-radius:6px;padding:7px 8px;font-size:13px;font-weight:700;background:#fff}
 .gblock{margin-top:8px}
 .gblock[data-pid]:empty{height:98px;background:linear-gradient(var(--wash),var(--wash)) 0 24px/100% 58px no-repeat;border-radius:8px}
@@ -329,6 +331,8 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
   .sthumb i{display:block;width:10px;height:2px;border-radius:1px;background:#fff;opacity:.85}
   .sthumb.drag{opacity:1;cursor:grabbing}
   #panel>.totop{right:40px}
+  #shtrack{z-index:1060;right:auto;width:28px}
+  .sheet .body{padding-right:34px}
 }
 .qwrap{position:relative}
 .qwrap input{padding-right:36px}
@@ -480,6 +484,7 @@ body.collapsed .totop,body.collapsed #panel>.catbar{display:none}
     <button type="button" class="gfold" id="gfold" hidden aria-label="Collapse the results" title="Swipe up or tap to collapse"><span></span></button>
   </div>
   <aside class="sheet" id="sheet" hidden aria-label="Place details"></aside>
+  <div class="strack" id="shtrack" hidden><div class="sthumb" id="shthumb" role="scrollbar" aria-label="Drag to scroll the details" aria-orientation="vertical"><i></i><i></i><i></i></div></div>
   <div class="picking" id="pickingMsg" hidden></div>
 </main>
 <div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Photo">
@@ -1066,13 +1071,13 @@ function renderChips(){
 function toggleCat(k){
   const hide=!S.hidden.includes(k);
   S.hidden=hide?[...S.hidden,k]:S.hidden.filter(x=>x!==k);
-  save();refresh();toast(`${CATS[k].label} ${hide?'hidden':'shown'}`);
+  save();refresh();
 }
 const layerAv=(l,size)=>`<span class="av" style="--c:${l.color};--s:${size}px"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="#fff" stroke="none"/></svg></span>`;
-function toggleLayer(id){const l=S.layers.find(x=>x.id===id);if(!l)return;const hide=!S.hidden.includes(id);S.hidden=hide?[...S.hidden,id]:S.hidden.filter(x=>x!==id);save();refresh();toast(`${l.name} ${hide?'hidden':'shown'}`);}
+function toggleLayer(id){const l=S.layers.find(x=>x.id===id);if(!l)return;const hide=!S.hidden.includes(id);S.hidden=hide?[...S.hidden,id]:S.hidden.filter(x=>x!==id);save();refresh();}
 function favAv(size,on){return `<span class="av" style="--c:#E8B100;--s:${size}px"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.3 5.4 5.7.6-4.3 3.9 1.3 5.8L12 15.8l-5 2.9 1.3-5.8L4 9l5.7-.6z"/></svg></span>`;}
 $('#chips').onclick=e=>{
-  if(e.target.closest('[data-favonly]')){S.favOnly=!S.favOnly;save();refresh();toast(S.favOnly?'Showing all favorites':'Favorites now follow their category');return;}
+  if(e.target.closest('[data-favonly]')){S.favOnly=!S.favOnly;save();refresh();return;}
   const l=e.target.closest('[data-layer]');if(l)return toggleLayer(l.dataset.layer);
   const b=e.target.closest('[data-cat]');if(b)toggleCat(b.dataset.cat);};
 $('#legend').onclick=e=>{const l=e.target.closest('[data-layer]');if(l)return toggleLayer(l.dataset.layer);const b=e.target.closest('[data-cat]');if(b)toggleCat(b.dataset.cat);};
@@ -1276,6 +1281,7 @@ async function openPlaceSheet(id){
   if(p.gid){renderSheet(null,true);try{const d=await gdetails(p.gid);if(sheetCtx?.mine===p)renderSheet(d);}catch(e){renderSheet(null);}}
   else renderSheet(null);
 }
+const SHEET_TOP='<button class="shtop" data-sheet="top" aria-label="Back to top" title="Back to top"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>';
 function renderSheet(d,loading){
   const {r}=sheetCtx;const mine=sheetCtx.mine||(!linkTarget&&d&&S.places.find(p=>p.gid===d.id));
   const name=d?.displayName?.text||r.name,addr=d?.formattedAddress||r.addr||'';
@@ -1300,8 +1306,9 @@ function renderSheet(d,loading){
      ${!loading&&r.src!=='g'?`<p class="hint">${G_OK===false?'Connect Google to see photos and reviews here.':'This place is not linked to Google, so there are no photos or reviews.'}</p>`:''}
      ${reviews.length?`<h3>Reviews</h3>${reviews.map(v=>`<div class="review"><div class="who"><b>${esc(v.authorAttribution?.displayName||'Google user')}</b><span><span class="stars">★ ${v.rating||''}</span> ${esc(v.relativePublishTimeDescription||'')}</span></div><p>${esc(v.text?.text||v.originalText?.text||'')}</p></div>`).join('')}<div class="credit">Reviews from Google</div>`:''}
    </div>
-   <div class="addbar">${mine?`<span class="hint" style="flex:1">In your places${mine.name!==name?` as ${esc(mine.name)}`:''}.</span><button class="btn ghost small" data-sheet="show" data-id="${mine.id}">Show in list</button><button class="btn small" data-sheet="fav" data-id="${mine.id}">${mine.fav?'★ Favorited':'☆ Favorite'}</button>${mine.gid&&r.src==='g'?`<button class="btn ghost small" data-sheet="unlink" data-id="${mine.id}">Unlink</button>`:''}`
-     :linkBar(r,loading)+`<select id="sheetCat" aria-label="Category">${Object.entries(CATS).map(([k,c])=>`<option value="${k}"${k===guess?' selected':''}>${c.label}</option>`).join('')}</select><button class="btn" data-sheet="add"${loading?' disabled':''}>Add as a new place</button>`}</div>`;
+   <div class="addbar">${mine?`<button class="btn ghost small" data-sheet="show" data-id="${mine.id}">Show in list</button><button class="btn small" data-sheet="fav" data-id="${mine.id}">${mine.fav?'★ Favorited':'☆ Favorite'}</button>${mine.gid&&r.src==='g'?`<button class="btn ghost small" data-sheet="unlink" data-id="${mine.id}">Unlink</button>`:''}${SHEET_TOP}`
+     :linkBar(r,loading)+`<select id="sheetCat" aria-label="Category">${Object.entries(CATS).map(([k,c])=>`<option value="${k}"${k===guess?' selected':''}>${c.label}</option>`).join('')}</select><button class="btn" data-sheet="add"${loading?' disabled':''}>Add as a new place</button>${SHEET_TOP}`}</div>`;
+  requestAnimationFrame(syncSheetThumb);
 }
 function linkBar(r,loading){
   if(r.src!=='g')return G_OK===false?'<div class="linkhint">Once Google is connected, you can link places you find here to places already in your list.</div>':'';
@@ -1311,10 +1318,42 @@ function linkBar(r,loading){
     +`<select class="linkpick" data-linkpick="1" aria-label="Link to a place in my list"${loading?' disabled':''}><option value="">Link to a place already in my list…</option>${opts.map(({p,d})=>`<option value="${p.id}">${esc(p.name)} (${fmtMi(d)} away${p.gid?', relink':''})</option>`).join('')}</select>`;
 }
 function closeSheetKeepLink(){$('#sheet').hidden=true;sheetCtx=null;searchMarker?.remove();searchMarker=null;}
-function closeSheet(){$('#sheet').hidden=true;sheetCtx=null;linkTarget=null;searchMarker?.remove();searchMarker=null;}
+function closeSheet(){$('#sheet').hidden=true;sheetCtx=null;linkTarget=null;searchMarker?.remove();searchMarker=null;syncSheetThumb();}
+/* back to the small map card for this place (the first-tap preview) */
+function collapseSheet(){
+  const c=sheetCtx,id=c?.mine?.id||(c&&findDot(c.r)?.d.id);
+  closeSheet();if(id&&byId(id))openMini(id);
+}
+/* swipe up once the details are scrolled to the bottom to collapse them */
+(function(){
+  const el=$('#sheet');let y0=0,atEnd=false;
+  el.addEventListener('touchstart',e=>{y0=e.touches[0].clientY;atEnd=el.scrollTop+el.clientHeight>=el.scrollHeight-2;},{passive:true});
+  el.addEventListener('touchend',e=>{const t=e.changedTouches[0];if(atEnd&&t&&t.clientY-y0<-60)collapseSheet();atEnd=false;});
+  el.addEventListener('scroll',()=>syncSheetThumb(),{passive:true});
+})();
+/* a handle on the sheet's right edge, sized to how much of it is showing, that can be dragged to scroll */
+function syncSheetThumb(){
+  const tr=$('#shtrack'),sh=$('#sheet');
+  if(sh.hidden||!phone()||sh.scrollHeight<=sh.clientHeight+4){tr.hidden=true;return;}
+  const bar=sh.querySelector('.addbar')?.offsetHeight||0,w=$('#mapwrap');
+  const top=sh.offsetTop+54,h=sh.clientHeight-bar-62;
+  tr.hidden=false;tr.style.top=top+'px';tr.style.height=h+'px';tr.style.left=(sh.offsetLeft+sh.offsetWidth-30)+'px';
+  const th=$('#shthumb'),tl=Math.max(48,Math.min(h-10,Math.round(h*sh.clientHeight/sh.scrollHeight)));
+  th.style.height=tl+'px';th.style.top=Math.round((h-tl)*sh.scrollTop/(sh.scrollHeight-sh.clientHeight))+'px';
+}
+(function(){
+  const th=$('#shthumb'),sh=$('#sheet');let y0=0,t0=0,on=false;
+  th.addEventListener('pointerdown',e=>{on=true;e.preventDefault();e.stopPropagation();th.setPointerCapture(e.pointerId);th.classList.add('drag');y0=e.clientY;t0=th.offsetTop;});
+  th.addEventListener('pointermove',e=>{if(!on)return;const max=$('#shtrack').clientHeight-th.offsetHeight;const t=Math.max(0,Math.min(max,t0+e.clientY-y0));sh.scrollTop=t/max*(sh.scrollHeight-sh.clientHeight);syncSheetThumb();});
+  const up=()=>{on=false;th.classList.remove('drag');};
+  th.addEventListener('pointerup',up);th.addEventListener('pointercancel',up);
+  ['touchstart','touchmove','touchend'].forEach(ev=>th.addEventListener(ev,e=>e.stopPropagation(),{passive:true}));
+  addEventListener('resize',syncSheetThumb);
+})();
 $('#sheet').onclick=e=>{
   const b=e.target.closest('[data-sheet]');if(!b)return;const a=b.dataset.sheet;
   if(a==='close')return closeSheet();
+  if(a==='top'){$('#sheet').scrollTo({top:0,behavior:'smooth'});return;}
   if(a==='link')return linkPlace(b.dataset.id);
   if(a==='unlink'){const p=byId(b.dataset.id);if(p&&confirm(`Unlink ${p.name} from this Google place?`)){delete p.gid;p.gtried=1;save();refresh();closeSheet();toast('Unlinked');}return;}
   if(a==='show'){const id=b.dataset.id;closeSheet();showInList(id);select(id);return;}
@@ -1966,7 +2005,7 @@ document.querySelector('.chipsbar').onclick=e=>{
   const b=e.target.closest('[data-all]');if(!b)return;
   const on=b.dataset.all==='1';
   S.hidden=on?[]:[...Object.keys(CATS),...S.layers.map(l=>l.id)];S.favOnly=on;
-  save();refresh();toast(on?'All categories shown':'All categories hidden');
+  save();refresh();
 };
 /* back to top for whichever tab is open */
 const openPane=()=>[...document.querySelectorAll('.tabpane')].find(p=>!p.hidden);
