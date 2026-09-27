@@ -29,6 +29,11 @@ header h1 small{display:block;font-weight:500;font-size:13px;color:var(--ink-3);
 .home-pill{font-size:13px;color:var(--ink-2);text-align:left;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
 .home-pill span::after{content:":"}
 .home-pill b{display:inline;margin-left:5px;color:var(--ink);font-weight:700}
+.syncbtn{flex:none;display:flex;align-items:center;gap:5px;border:1.5px solid var(--rule);background:#fff;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;color:var(--ink-2)}
+.syncbtn::before{content:"";width:7px;height:7px;border-radius:50%;background:#C9CED6}
+.syncbtn[data-st="ok"]::before{background:#1E9E4A}
+.syncbtn[data-st="busy"]::before{background:#E8B100}
+.syncbtn[data-st="err"]::before{background:#C4001A}
 .pin.home .av{background:#E8B100}
 nav.tabs{display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--rule)}
 nav.tabs button{border:0;background:none;padding:10px 10px 12px;font-weight:700;font-size:15px;color:var(--ink-3);border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
@@ -177,6 +182,7 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
 .dlgbox p{margin:0;font-size:15px;line-height:1.45;color:var(--ink);white-space:pre-line}
 .dlgbox input{border:1.5px solid var(--rule);border-radius:8px;padding:9px 11px;font-size:16px;width:100%}
 .dlgbtns{display:flex;gap:8px;justify-content:flex-end}
+.dlgbtns [hidden]{display:none}
 .dlgbtns .btn.danger{background:#C4001A;border-color:#C4001A}
 .dlgpick{display:grid;gap:6px}
 .cated{width:min(480px,100%);max-height:min(86vh,calc(100dvh - 32px));display:flex;flex-direction:column;overflow:hidden;gap:10px;position:relative}
@@ -468,6 +474,7 @@ body.collapsed .totop,body.collapsed #panel>.catbar{display:none}
   <header>
     <h1>Tokyo Planner<small>Places, stations and day routes</small></h1>
     <div class="home-pill" id="homePill"></div>
+    <button type="button" class="syncbtn" id="syncBtn" data-st="off" title="Share this list across your phones and computers">Sync</button>
   </header>
   <div class="resizer" id="resizer" role="separator" aria-orientation="vertical" aria-label="Drag to resize the panel" tabindex="0"></div>
   <nav class="tabs" role="tablist">
@@ -767,7 +774,7 @@ let S;
 try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
 S=(S&&Array.isArray(S.places))?migrate(S):seedState();
 rebuildCats();
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('Could not save. Browser storage is full.');}}
+function save(quiet){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('Could not save. Browser storage is full.');}if(!quiet)syncSoon();}
 
 /* ---------- photo storage (IndexedDB) ---------- */
 const idb=(()=>{let dbp;
@@ -2393,7 +2400,116 @@ function refresh(){rebuildCats();S.days.forEach(normalizeDay);renderHome();rende
   $('#panel header').addEventListener('click',tapBar);
   $('#panel .grab').addEventListener('click',tapBar);
 })();
-settleHotelFavs();placeCatbar();save();refresh();syncRouteBtn();fillAddresses();
+
+/* ---------- sync: one shared list for every phone and computer that joins with the same code ---------- */
+/* which categories are switched on stays per device; everything else is shared */
+var SYNC_KEY='tokyo-planner-sync',LOCAL_ONLY=['hidden','favOnly','activeDay','amen','maxUsd'];
+var SY=(()=>{try{return JSON.parse(localStorage.getItem(SYNC_KEY))||{}}catch(e){return {}}})(),syncing=false,syncAgain=false,syncT=0;
+const saveSY=()=>{try{localStorage.setItem(SYNC_KEY,JSON.stringify(SY))}catch(e){}};
+const shared=st=>{const o=JSON.parse(JSON.stringify(st));LOCAL_ONLY.forEach(k=>delete o[k]);return o;};
+const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const keyOf=x=>x&&typeof x==='object'&&!Array.isArray(x)?(x.id??x.key):undefined;
+const isObj=x=>x&&typeof x==='object'&&!Array.isArray(x);
+/* three-way merge: keep whatever each side changed since the last sync; if both changed the same thing, this device wins */
+function mergeVal(b,l,r){
+  if(same(l,b))return r;if(same(r,b)||same(l,r))return l;
+  if(isObj(l)&&isObj(r)){const o={},bo=isObj(b)?b:{};new Set([...Object.keys(r),...Object.keys(l)]).forEach(k=>{const v=mergeVal(bo[k],l[k],r[k]);if(v!==undefined)o[k]=v;});return o;}
+  if(Array.isArray(l)&&Array.isArray(r)){
+    const ba=Array.isArray(b)?b:[];
+    if([...l,...r].length&&[...l,...r].every(x=>keyOf(x)!==undefined)){
+      const m=a=>new Map(a.filter(x=>keyOf(x)!==undefined).map(x=>[keyOf(x),x])),bm=m(ba),lm=m(l),rm=m(r);
+      const ids=[...r.map(keyOf),...l.map(keyOf).filter(k=>!rm.has(k))];
+      return ids.map(k=>mergeVal(bm.get(k),lm.get(k),rm.get(k))).filter(v=>v!==undefined);
+    }
+    const bs=new Set(ba.map(x=>JSON.stringify(x))),ls=new Set(l.map(x=>JSON.stringify(x)));
+    const out=r.filter(x=>!(bs.has(JSON.stringify(x))&&!ls.has(JSON.stringify(x))));
+    l.forEach(x=>{const j=JSON.stringify(x);if(!bs.has(j)&&!out.some(y=>JSON.stringify(y)===j))out.push(x);});
+    return out;
+  }
+  return l;
+}
+function syncMark(st){const b=$('#syncBtn');if(!b)return;b.dataset.st=SY.code?st:'off';b.textContent=!SY.code?'Sync':st==='busy'?'Syncing':st==='err'?'Offline':'Synced';}
+function syncSoon(ms=1200){if(!SY||!SY.code)return;clearTimeout(syncT);syncT=setTimeout(syncNow,ms);}
+/* take the shared list into this device, keeping this device's own filters */
+function adopt(data){
+  const keep={};LOCAL_ONLY.forEach(k=>keep[k]=S[k]);
+  S=migrate({...JSON.parse(JSON.stringify(data)),...keep});
+  if(S.activeDay>=S.days.length)S.activeDay=0;
+  save(true);
+  if(!document.querySelector('#list [contenteditable="true"]'))refresh();
+}
+async function syncNow(){
+  if(!SY.code)return;if(syncing){syncAgain=true;return;}
+  syncing=true;syncMark('busy');
+  try{
+    for(let tries=0;tries<5;tries++){
+      const g=await fetch('/api/sync?trip='+SY.code);
+      if(g.status===404){SY={};saveSY();syncMark('off');return;}
+      if(!g.ok)throw new Error('get '+g.status);
+      const remote=await g.json(),local=shared(S);
+      const merged=SY.base?mergeVal(SY.base,local,remote.data):remote.data;
+      let etag=remote.etag;
+      if(!same(merged,remote.data)){
+        const p=await fetch('/api/sync?trip='+SY.code,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({data:merged,etag})});
+        if(p.status===409)continue;
+        if(!p.ok)throw new Error('post '+p.status);
+        etag=(await p.json()).etag;
+      }
+      SY.etag=etag;SY.base=merged;saveSY();
+      if(!same(merged,shared(S)))adopt(merged);
+      syncMark('ok');return;
+    }
+    throw new Error('busy');
+  }catch(e){syncMark('err');}
+  finally{syncing=false;if(syncAgain){syncAgain=false;syncSoon(300);}}
+}
+const newCode=()=>{const a=new Uint8Array(16);crypto.getRandomValues(a);return [...a].map(x=>'abcdefghijklmnopqrstuvwxyz0123456789'[x%36]).join('');};
+const tripLink=()=>location.origin+location.pathname+'?trip='+SY.code;
+const codeFrom=t=>{t=String(t||'').trim();const m=t.match(/[?&]trip=([a-z0-9]+)/i);return (m?m[1]:t).toLowerCase().replace(/[^a-z0-9]/g,'');};
+async function startSync(){
+  const code=newCode();syncMark('busy');
+  try{
+    const p=await fetch('/api/sync?trip='+code,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({data:shared(S),create:true})});
+    if(!p.ok)throw 0;
+    SY={code,etag:(await p.json()).etag,base:shared(S)};saveSY();syncMark('ok');
+    showSync();
+  }catch(e){syncMark('off');ask({msg:'Could not start syncing. Check your connection and try again.',cancel:null});}
+}
+async function joinSync(code){
+  code=codeFrom(code);if(!code)return;
+  if(code===SY.code){showSync();return;}
+  syncMark('busy');
+  try{
+    const g=await fetch('/api/sync?trip='+code);
+    if(g.status===404||g.status===400){syncMark(SY.code?'ok':'off');ask({msg:'That sync code was not found.',cancel:null});return;}
+    if(!g.ok)throw 0;
+    const remote=await g.json();syncMark(SY.code?'ok':'off');
+    const y=await ask({msg:`Join this shared list? It has ${remote.data.places.length} places.\nThe list on this device will be replaced by the shared one.`,ok:'Join'});
+    if(!y)return;
+    SY={code,etag:remote.etag,base:remote.data};saveSY();adopt(remote.data);syncMark('ok');
+  }catch(e){syncMark(SY.code?'err':'off');ask({msg:'Could not reach the shared list. Check your connection and try again.',cancel:null});}
+}
+async function showSync(){
+  if(!SY.code){
+    const i=await ask({msg:'Sync keeps the same list on all your phones and computers. Changes show up on the others within a few seconds.',choices:[{label:'Share this list',sub:'Get a link to open on your other devices'},{label:'Join a shared list',sub:'Paste a sync link or code from another device'}]});
+    if(i===0)startSync();
+    if(i===1){const t=await ask({msg:'Paste the sync link or code',input:'',ok:'Join'});if(t)joinSync(t);}
+    return;
+  }
+  const i=await ask({msg:`This list is shared. Open this link on your other phones and computers:\n${tripLink()}`,choices:[{label:'Copy link'},{label:'Stop syncing on this device',sub:'Keeps the list here, stops sharing changes'}]});
+  if(i===0){await copyText(tripLink());}
+  if(i===1&&await ask({msg:'Stop syncing on this device?',ok:'Stop',danger:true})){SY={};saveSY();syncMark('off');}
+}
+$('#syncBtn').addEventListener('click',e=>{e.stopPropagation();showSync();});
+setInterval(()=>{if(document.visibilityState==='visible')syncNow();},15000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow();});
+function syncBoot(){
+  syncMark(SY.code?'ok':'off');
+  const q=new URLSearchParams(location.search).get('trip');
+  if(q){history.replaceState(null,'',location.pathname);joinSync(q);}
+  else syncNow();
+}
+settleHotelFavs();placeCatbar();save(true);refresh();syncRouteBtn();fillAddresses();syncBoot();
 </script>
 </body>
 </html>
