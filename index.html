@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tokyo Planner</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗼</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<style>
+:root{--ink:#1C2230;--ink-2:#4A5264;--ink-3:#8A91A2;--paper:#FFFFFF;--wash:#F1F3F6;--rule:#DFE3E9;--line:#1F3A93;--focus:#00A7DB;--r-sm:6px;--r-lg:14px;
+font-family:"Zen Kaku Gothic New","Hiragino Sans","Segoe UI",system-ui,sans-serif;color:var(--ink)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow-x:hidden;max-width:100%}
+body{background:var(--wash);display:grid;grid-template-columns:var(--pw,420px) minmax(0,1fr);height:100dvh;overflow:hidden;touch-action:manipulation}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+#panel{position:relative;background:var(--paper);display:flex;flex-direction:column;min-height:0;min-width:0;border-right:1px solid var(--rule);padding-top:env(safe-area-inset-top,0px)}
+.resizer{position:absolute;top:0;right:-5px;width:10px;height:100%;cursor:col-resize;z-index:700;touch-action:none}
+.resizer::after{content:"";position:absolute;left:4px;top:50%;width:2px;height:44px;margin-top:-22px;border-radius:2px;background:#C9CED6;opacity:0;transition:opacity .15s}
+.resizer:hover::after,.resizer.drag::after{opacity:1}
+.collapse{display:none;border:1.5px solid var(--rule);background:#fff;width:34px;height:34px;border-radius:50%;place-items:center;padding:0;flex:none}
+.collapse svg{width:18px;height:18px;fill:none;stroke:var(--ink);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s}
+header{padding:18px 20px 12px;display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+header h1{margin:0;font-weight:900;font-size:26px;letter-spacing:-.01em;line-height:1}
+header h1 small{display:block;font-weight:500;font-size:13px;color:var(--ink-3);letter-spacing:0;margin-top:6px}
+.home-pill{font-size:12px;color:var(--ink-2);text-align:right;max-width:170px;line-height:1.3}
+.home-pill b{display:block;color:var(--ink);font-weight:700}
+nav.tabs{display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--rule)}
+nav.tabs button{border:0;background:none;padding:10px 10px 12px;font-weight:700;font-size:15px;color:var(--ink-3);border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-color:var(--ink)}
+nav.tabs .count{display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:9px;background:var(--line);color:#fff;font-size:11px;margin-left:4px;padding:0 5px;vertical-align:1px}
+.tabpane{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:14px 18px 28px;overscroll-behavior:contain}
+.tabpane[hidden]{display:none}
+.av{--c:#888;--s:32px;width:var(--s);height:var(--s);border-radius:50%;background:var(--c);display:grid;place-items:center;flex:none;box-shadow:0 0 0 2px #fff,0 1px 3px rgba(28,34,48,.35)}
+.av svg{width:62%;height:62%;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.av.anchor{border-radius:9px}
+.chips{display:grid;grid-template-columns:repeat(5,1fr);gap:8px 4px;margin-bottom:14px}
+.chip{display:flex;flex-direction:column;align-items:center;gap:5px;border:0;background:none;padding:4px 0;font-size:11px;font-weight:700;color:var(--ink-2)}
+.chip .av{--s:40px}
+.chip[aria-pressed="false"]{color:var(--ink-3)}
+.chip[aria-pressed="false"] .av{background:#C9CED6}
+.chip[data-favonly][aria-pressed="false"] .av{background:#fff;box-shadow:0 0 0 2px #E8B100}
+.chip[data-favonly][aria-pressed="false"] .av svg{stroke:#E8B100}
+.chip[data-favonly][aria-pressed="true"]{color:#8A6500}
+.chip small{font-weight:500;color:var(--ink-3)}
+.search{display:flex;gap:6px;margin-bottom:12px}
+.search input{flex:1;border:1.5px solid var(--rule);border-radius:var(--r-sm);padding:9px 11px;background:var(--wash)}
+.btn{border:1.5px solid var(--ink);background:var(--ink);color:#fff;border-radius:var(--r-sm);padding:8px 12px;font-weight:700;font-size:14px;text-decoration:none;display:inline-block}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--rule)}
+.btn.small{padding:5px 9px;font-size:13px}
+.btn.danger{background:#C4001A;border-color:#C4001A}
+.place{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:start;padding:12px 2px;border-bottom:1px solid var(--rule)}
+.place>div{min-width:0}
+.favbtn{border:0;background:none;padding:0;border-radius:50%;line-height:0}
+.av.fav{box-shadow:0 0 0 2px #fff,0 0 0 5px #E8B100,0 2px 6px rgba(232,177,0,.45)}
+.favstar{--c:#E8B100}
+.grp{border:1.5px solid var(--rule);border-radius:14px;padding:12px 14px;margin-bottom:14px}
+.grp h2{margin:0;font-size:16px;font-weight:900}
+.grp .gsub{font-size:12px;color:var(--ink-3);margin:2px 0 8px}
+.grow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--rule)}
+.grow h4{margin:0;font-size:14px;font-weight:700;line-height:1.3}
+.grow .sub{font-size:12px;color:var(--ink-3)}
+.grp .row2{margin-top:10px}
+.place:last-child{border-bottom:0}
+.place h3{margin:0 0 2px;font-size:15px;font-weight:700;line-height:1.3;cursor:pointer}
+.place .stn{font-size:13px;color:var(--ink-2)}
+.addr{display:flex;gap:4px;align-items:flex-start;font-size:12.5px;line-height:1.45;color:var(--ink-2);margin:1px 0 3px}
+.addr .txt{min-width:0;overflow-wrap:anywhere}
+.addr .txt.none{color:#A9B0BD;font-style:italic}
+.copy{border:0;background:none;padding:2px;margin-top:-1px;border-radius:4px;color:var(--ink-3);flex:none;line-height:0}
+.copy:hover{background:var(--wash);color:var(--ink)}
+.copy svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pop .addr{margin:0 0 6px}
+.rbtn{width:32px;height:32px;border-radius:50%;border:1.5px solid var(--ink);background:var(--ink);color:#fff;display:grid;place-items:center;padding:0;flex:none}
+.rbtn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.rbtn:hover{background:#2E3750}
+.rbtn.on{background:var(--line);border-color:var(--line);color:#fff}
+.rbtn.ghost{background:transparent;border-color:var(--rule);color:var(--ink);font-size:13px;font-weight:900;letter-spacing:1px}
+.rbtn.ghost:hover{background:var(--wash)}
+.ontrip{font-size:12px;font-weight:700;color:var(--line);margin-top:2px}
+.place .note{font-size:13px;color:var(--ink-2);margin-top:4px;line-height:1.5;white-space:pre-wrap}
+.place .note.empty-bio{color:#A9B0BD;font-style:italic}
+.place .acts{display:flex;flex-direction:column;gap:4px;align-items:flex-end;position:relative}
+.place.sel{background:linear-gradient(90deg,var(--wash),transparent)}
+.place.drop{outline:2px dashed var(--line);outline-offset:-2px;background:rgba(31,58,147,.05)}
+.editable{border-radius:4px;cursor:text}
+.editable:hover{background:rgba(31,58,147,.06)}
+.editable[contenteditable="true"]{background:#FFF8E6;outline:2px solid #F39700;outline-offset:1px;padding:2px 4px;cursor:text;font-style:normal;color:var(--ink)}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--wash);color:var(--ink-2);margin-left:4px;vertical-align:1px}
+.empty{color:var(--ink-3);font-size:14px;padding:24px 4px;line-height:1.6}
+.thumbs{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center}
+.thumbs img{width:58px;height:58px;object-fit:cover;border-radius:8px;background:var(--wash);cursor:zoom-in;display:block}
+.addphoto{width:58px;height:58px;border:1.5px dashed #C3C9D3;border-radius:8px;background:none;color:var(--ink-3);font-size:11px;font-weight:700;line-height:1.2}
+.addphoto:hover{border-color:var(--ink);color:var(--ink)}
+.menu{position:absolute;right:0;top:calc(100% + 4px);z-index:50;background:#fff;border:1.5px solid var(--rule);border-radius:10px;box-shadow:0 8px 24px rgba(28,34,48,.16);padding:4px;display:grid;min-width:190px}
+.menu button{border:0;background:none;text-align:left;padding:9px 10px;border-radius:6px;font-size:13px;font-weight:700}
+.menu button:hover{background:var(--wash)}
+.menu .danger{color:#C4001A}
+.group{margin-bottom:18px}
+.group h2{font-size:16px;font-weight:900;margin:0 0 4px;display:flex;justify-content:space-between;align-items:baseline}
+.group h2 span{font-size:12px;font-weight:500;color:var(--ink-3)}
+.group.pending h2{color:#B35C00}
+.trow{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--rule)}
+.trow:last-child{border-bottom:0}
+.trow h4{margin:0;font-size:14px;font-weight:700;line-height:1.3}
+.trow .sub{font-size:12px;color:var(--ink-3)}
+.trow select{border:1.5px solid var(--rule);border-radius:6px;padding:4px 6px;background:var(--paper);font-size:12px;font-weight:700;max-width:110px}
+.group.pending .trow select{border-color:#F39700}
+.xbtn{border:0;background:none;width:28px;height:28px;border-radius:6px;color:var(--ink-3);font-size:14px}
+.xbtn:hover{background:var(--wash);color:var(--ink)}
+.daylink{border:0;background:none;padding:0;font:inherit;font-weight:900;color:var(--ink);text-align:left;cursor:pointer}
+.daylink:hover{color:var(--line);text-decoration:underline}
+.viewdir{border:1.5px solid var(--rule);background:var(--paper);border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;color:var(--line)}
+.viewdir:hover{border-color:var(--line)}
+.trow.homebreak h4{color:var(--ink-2)}
+.pop select{border:1.5px solid var(--rule);border-radius:6px;padding:5px 6px;font-size:12px;font-weight:700;background:#fff;margin-bottom:8px;width:100%}
+.addhome{border:1.5px dashed #C3C9D3;background:none;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:700;color:var(--ink-2);margin-top:6px}
+.addhome:hover{border-color:var(--ink);color:var(--ink)}
+.triphead{position:relative;z-index:1;margin:8px 0 4px 44px;display:inline-block;background:var(--line);color:#fff;font-size:12px;font-weight:900;border-radius:999px;padding:2px 10px}
+.addstop{margin-left:44px;padding:2px 0 8px}
+.addstop select{border:1.5px dashed #C3C9D3;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:700;background:#fff;color:var(--ink-2);max-width:100%}
+.addstop select:hover{border-color:var(--ink)}
+.days{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.days button{border:1.5px solid var(--rule);background:var(--paper);border-radius:999px;padding:5px 12px;font-weight:700;font-size:13px}
+.days button[aria-pressed="true"]{background:var(--line);border-color:var(--line);color:#fff}
+.opts{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--ink-2);margin-bottom:14px;flex-wrap:wrap}
+.totals{display:flex;gap:18px;padding:12px 14px;background:var(--wash);border-radius:var(--r-lg);margin-bottom:16px}
+.totals div{font-size:12px;color:var(--ink-2)}
+.totals b{display:block;font-size:22px;font-weight:900;color:var(--ink);line-height:1.1}
+ol.strip{list-style:none;margin:0;padding:0;position:relative}
+ol.strip::before{content:"";position:absolute;left:14px;top:16px;bottom:16px;width:6px;background:var(--line);border-radius:3px}
+.stop{position:relative;display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;padding:6px 0}
+.stop .av{--s:34px;position:relative;z-index:1}
+.stop .num{position:absolute;left:-5px;top:-1px;z-index:2;background:var(--ink);color:#fff;font-size:10px;font-weight:900;border-radius:999px;min-width:17px;height:17px;display:grid;place-items:center;padding:0 3px;border:2px solid #fff}
+.stop h4{margin:0;font-size:15px;font-weight:700;line-height:1.25}
+.stop .sub{font-size:12px;color:var(--ink-3)}
+.stop .ctl{display:flex;gap:2px}
+.stop .ctl button{border:0;background:none;width:28px;height:28px;border-radius:6px;color:var(--ink-2);font-size:15px}
+.stop .ctl button:hover{background:var(--wash)}
+.leg{margin-left:44px;padding:6px 0 10px;font-size:13px;color:var(--ink-2)}
+.leg .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.leg select{border:1.5px solid var(--rule);border-radius:6px;padding:3px 6px;background:var(--paper);font-size:12px;font-weight:700}
+.leg .num2{font-weight:900;color:var(--ink);font-size:14px}
+.leg ul{margin:6px 0 0;padding:0;list-style:none}
+.leg li{display:flex;gap:8px;align-items:baseline;line-height:1.5}
+.leg li i{font-style:normal;flex:none;width:44px;font-weight:700;font-size:11px;color:var(--ink)}
+.leg a{color:var(--line);font-weight:700;text-decoration:none;font-size:12px}
+.leg a:hover{text-decoration:underline}
+.est{font-size:12px;color:var(--ink-3);line-height:1.5;margin-top:16px}
+form.add{display:grid;gap:12px}
+form.add label{display:grid;gap:5px;font-size:13px;font-weight:700;color:var(--ink-2)}
+form.add input,form.add select,form.add textarea{border:1.5px solid var(--rule);border-radius:var(--r-sm);padding:9px 11px;background:var(--wash);font-weight:400;color:var(--ink)}
+form.add textarea{min-height:70px;resize:vertical}
+.results{display:grid;gap:4px}
+.results button{text-align:left;border:1.5px solid var(--rule);background:var(--paper);border-radius:var(--r-sm);padding:8px 10px;font-size:13px;line-height:1.35}
+.results button:hover{border-color:var(--ink)}
+.coords{font-size:13px;color:var(--ink-2);padding:8px 10px;background:var(--wash);border-radius:var(--r-sm)}
+.hint{font-size:13px;color:var(--ink-3);line-height:1.5}
+.row2{display:flex;gap:8px;flex-wrap:wrap}
+hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
+#mapwrap{position:relative;min-height:0}
+#map{position:absolute;inset:0;background:#F2F2EF}
+.maptools{position:absolute;right:12px;top:calc(12px + env(safe-area-inset-top,0px));z-index:500;display:flex;flex-direction:column;gap:6px}
+.maptools button{background:#fff;border:1.5px solid var(--rule);border-radius:8px;padding:7px 10px;font-weight:700;font-size:13px;box-shadow:0 1px 2px rgba(28,34,48,.12)}
+.maptools button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.legend{position:absolute;left:12px;bottom:calc(22px + env(safe-area-inset-bottom,0px));z-index:500;display:flex;gap:6px;background:rgba(255,255,255,.94);border:1.5px solid var(--rule);border-radius:999px;padding:6px 8px;max-width:calc(100% - 80px);overflow-x:auto;box-shadow:0 1px 3px rgba(28,34,48,.15)}
+.legend button{border:0;background:none;padding:0;border-radius:50%}
+.legend .av{--s:30px;box-shadow:none}
+.legend button[aria-pressed="false"] .av{background:#C9CED6}
+.picking{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:600;background:var(--ink);color:#fff;padding:8px 14px;border-radius:999px;font-weight:700;font-size:14px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:3000;background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-weight:700;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+.lightbox{position:fixed;inset:0;z-index:2000;background:rgba(15,18,26,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:12px}
+.lightbox[hidden]{display:none}
+.lightbox img{max-width:100%;max-height:74vh;border-radius:10px;object-fit:contain}
+.lightbox .cap{color:#fff;font-weight:700;font-size:15px;text-align:center}
+.lightbox .cap small{display:block;font-weight:500;color:#AEB5C2;font-size:12px;margin-top:2px}
+.lightbox .row2 .btn.ghost{color:#fff;border-color:#4A5264}
+.pin{position:relative}
+.pin .badge{position:absolute;right:-9px;top:-9px;background:var(--ink);color:#fff;border:2px solid #fff;font-size:11px;font-weight:900;border-radius:999px;min-width:20px;height:20px;display:grid;place-items:center;padding:0 4px}
+.stnpin{width:12px;height:12px;border-radius:50%;background:#fff;border:3px solid #5B6475}
+.leaflet-popup-content{font-family:inherit;margin:12px 14px;min-width:210px}
+.pop img.hero{width:100%;height:120px;object-fit:cover;border-radius:8px;margin-bottom:8px;display:block;background:var(--wash)}
+.pop h3{margin:0 0 4px;font-size:15px}
+.pop p{margin:0 0 8px;font-size:13px;color:var(--ink-2);line-height:1.4;white-space:pre-wrap}
+.pop .row2 .btn{font-size:12px;padding:5px 8px}
+.stnlabel{background:#fff;border:1.5px solid #5B6475;border-radius:4px;font-weight:700;font-size:11px;padding:1px 5px;box-shadow:none}
+.stnlabel::before{display:none}
+.gsearch{position:absolute;left:12px;top:calc(12px + env(safe-area-inset-top,0px));z-index:640;width:min(380px,calc(100% - 140px))}
+.gsearch .bar{display:flex;align-items:center;background:#fff;border:1.5px solid var(--rule);border-radius:999px;box-shadow:0 2px 8px rgba(28,34,48,.14);padding:0 6px 0 14px}
+.gsearch .bar svg{width:17px;height:17px;fill:none;stroke:var(--ink-3);stroke-width:2.2;stroke-linecap:round;flex:none}
+.gsearch input{flex:1;min-width:0;border:0;background:none;padding:10px 8px;font-size:14px;outline:none}
+.gsearch .go{border:0;background:var(--ink);color:#fff;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:700}
+.gresults{margin-top:6px;background:#fff;border:1.5px solid var(--rule);border-radius:12px;box-shadow:0 8px 24px rgba(28,34,48,.16);max-height:55vh;overflow:auto}
+.gresults[hidden]{display:none}
+.gresults button{display:grid;grid-template-columns:52px 1fr;gap:10px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--rule);background:none;padding:8px 10px;align-items:center}
+.gresults button:last-child{border-bottom:0}
+.gresults button:hover{background:var(--wash)}
+.gresults img,.gresults .noimg{width:52px;height:52px;object-fit:cover;border-radius:8px;background:var(--wash);display:block}
+.gresults b{display:block;font-size:14px;line-height:1.3}
+.gresults small{display:block;font-size:12px;color:var(--ink-3);line-height:1.35}
+.stars{color:#D69200;font-weight:900}
+.sheet{position:absolute;left:12px;top:calc(64px + env(safe-area-inset-top,0px));bottom:14px;width:min(390px,calc(100% - 24px));z-index:660;background:#fff;border-radius:16px;box-shadow:0 14px 36px rgba(28,34,48,.25);overflow:auto;display:flex;flex-direction:column}
+.sheet[hidden]{display:none}
+.sheet .x{position:absolute;right:10px;top:10px;z-index:2;width:32px;height:32px;border-radius:50%;border:0;background:rgba(255,255,255,.95);box-shadow:0 1px 4px rgba(0,0,0,.25);font-size:15px}
+.sheet .gal{display:flex;gap:3px;overflow-x:auto;scroll-snap-type:x mandatory;flex:none;background:var(--wash)}
+.sheet .gal img{height:190px;width:260px;flex:none;object-fit:cover;scroll-snap-align:start}
+.sheet .body{padding:14px 16px 8px;flex:1}
+.sheet h2{margin:0 36px 4px 0;font-size:20px;font-weight:900;line-height:1.2}
+.sheet h3{font-size:14px;font-weight:900;margin:16px 0 2px}
+.sheet .meta{font-size:13px;color:var(--ink-2);margin-bottom:6px}
+.sheet .links{display:flex;gap:12px;margin:8px 0;font-size:13px;font-weight:700}
+.sheet .links a{color:var(--line);text-decoration:none}
+.sheet details{font-size:13px;color:var(--ink-2);margin:6px 0}
+.sheet details ul{margin:6px 0 0;padding-left:18px;line-height:1.6}
+.sheet .summary{font-size:13.5px;line-height:1.55;margin:8px 0}
+.review{border-top:1px solid var(--rule);padding:10px 0;font-size:13px;line-height:1.5}
+.review .who{display:flex;justify-content:space-between;gap:8px}
+.review p{margin:4px 0 0;color:var(--ink-2);white-space:pre-wrap}
+.credit{font-size:11px;color:var(--ink-3);margin-top:4px}
+.sheet .addbar{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--rule);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sheet .addbar select{border:1.5px solid var(--rule);border-radius:6px;padding:7px 8px;font-size:13px;font-weight:700;background:#fff}
+.gblock{margin-top:8px}
+.gblock .grate{font-size:12.5px;color:var(--ink-2)}
+.gblock .grate button{border:0;background:none;padding:0;margin-left:4px;color:var(--line);font-weight:700;font-size:12.5px}
+.gthumbs{display:flex;gap:4px;margin-top:6px;overflow-x:auto}
+.gthumbs img{width:58px;height:58px;flex:none;object-fit:cover;border-radius:8px;background:var(--wash);cursor:pointer}
+.linkhint{flex-basis:100%;font-size:13px;line-height:1.45;background:#FFF8E6;border:1.5px solid #F3C66B;border-radius:8px;padding:8px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sheet .addbar .linkpick{flex-basis:100%;border-style:dashed;color:var(--ink-2)}
+.linkhead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;font-size:13px;background:#FFF8E6;border-bottom:1px solid var(--rule)}
+.linkhead button{border:0;background:none;color:var(--line);font-weight:700;font-size:13px}
+.searchpin{width:22px;height:22px;border-radius:50%;background:#C4001A;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+@media (max-width:820px){
+  .gsearch{left:14px;width:calc(100% - 140px)}
+  .maptools{right:14px}
+  .maptools button{padding:6px 9px;font-size:12px}
+  .sheet{left:10px;right:10px;width:auto;top:60px;bottom:10px}
+  .legend{display:none}
+  .resizer{display:none}
+  .collapse{display:grid}
+  body.collapsed{grid-template-rows:1fr auto}
+  body.collapsed #panel nav.tabs,body.collapsed #panel .tabpane{display:none}
+  body.collapsed .collapse svg{transform:rotate(180deg)}
+  #panel{touch-action:pan-y}
+  .place{gap:10px}
+  .chips{gap:8px 2px}
+}
+@media (max-width:820px){
+  body{grid-template-columns:minmax(0,1fr);grid-template-rows:52dvh minmax(0,1fr)}
+  #mapwrap{grid-row:1}
+  #panel{grid-row:2;border-right:0;border-top:1px solid var(--rule);padding-top:0;padding-bottom:env(safe-area-inset-bottom,0px)}
+  header{padding:12px 20px 8px;align-items:center}
+  header h1{font-size:20px}
+  header h1 small{display:none}
+  nav.tabs{padding:0 14px}
+  nav.tabs button{font-size:14px;padding:9px 7px 11px}
+  .tabpane{padding:14px 20px 28px}
+  .legend{bottom:10px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<aside id="panel">
+  <header>
+    <h1>Tokyo Planner<small>Places, stations and day routes</small></h1>
+    <div class="home-pill" id="homePill"></div>
+    <button class="collapse" id="collapseBtn" aria-label="Collapse the panel" aria-expanded="true"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+  </header>
+  <div class="resizer" id="resizer" role="separator" aria-orientation="vertical" aria-label="Drag to resize the panel" tabindex="0"></div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="places">Places</button>
+    <button role="tab" aria-selected="false" data-tab="group">Grouping<span class="count" id="favCount" hidden></span></button>
+    <button role="tab" aria-selected="false" data-tab="route">Directions</button>
+    <button role="tab" aria-selected="false" data-tab="add">Add place</button>
+  </nav>
+  <section class="tabpane" id="tab-places">
+    <div class="chips" id="chips"></div>
+    <div class="search"><input id="q" type="search" placeholder="Filter by name or bio" aria-label="Filter places"></div>
+    <p class="hint" style="margin:-4px 0 6px">Tap an icon to favorite a place. Double-click a name or bio to edit it. To add a photo, copy an image, point at or click a place, and press Ctrl+V (Cmd+V on Mac). You can also drag an image onto a place.</p>
+    <div id="list"></div>
+  </section>
+  <section class="tabpane" id="tab-group" hidden>
+    <p class="hint" style="margin:0 0 12px">Favorites within a 20-minute walk of each other are grouped automatically. Tap a place's icon in Places to favorite it.</p>
+    <div id="groups"></div>
+  </section>
+  <section class="tabpane" id="tab-route" hidden>
+    <div class="days" id="days"></div>
+    <div class="opts">
+      <label><input type="checkbox" id="startHome"> Start and end at home base</label>
+      <button class="btn ghost small" id="renameDay">Rename day</button>
+      <button class="btn ghost small" id="clearDay">Clear day</button>
+    </div>
+    <div id="route"></div>
+  </section>
+  <section class="tabpane" id="tab-add" hidden>
+    <form class="add" id="addForm" autocomplete="off">
+      <input type="hidden" id="editId">
+      <label>Find a place
+        <div class="search" style="margin:0"><input id="geoQ" placeholder="e.g. Tsukiji Outer Market"><button class="btn" type="button" id="geoGo">Search</button></div>
+      </label>
+      <div class="results" id="geoRes"></div>
+      <div class="row2"><button class="btn ghost small" type="button" id="pickBtn">Or tap the map to drop a pin</button></div>
+      <div class="coords" id="coords">No location set yet.</div>
+      <label>Name<input id="fName" required></label>
+      <label>Address<input id="fAddr" placeholder="Filled in automatically. You can paste the exact address."></label>
+      <label>Category<select id="fCat"></select></label>
+      <label>Status<select id="fStatus"><option value="want">Want to go</option><option value="maybe">Maybe</option><option value="booked">Booked</option></select></label>
+      <label>Short bio<textarea id="fNotes" placeholder="What it is, hours, what to order, booking link"></textarea></label>
+      <div class="row2"><button class="btn" type="submit" id="saveBtn">Save place</button><button class="btn ghost" type="button" id="cancelEdit" hidden>Cancel edit</button></div>
+    </form>
+    <hr>
+    <p class="hint">Your places and photos save in this browser. Export a backup (photos included) to move them to another device.</p>
+    <div class="row2">
+      <button class="btn ghost small" id="exportBtn">Export backup</button>
+      <label class="btn ghost small" style="cursor:pointer">Import backup<input type="file" id="importFile" accept="application/json" hidden></label>
+      <button class="btn ghost small" id="resetBtn">Reset to starter list</button>
+    </div>
+  </section>
+</aside>
+<main id="mapwrap">
+  <div id="map" aria-label="Map of Tokyo"></div>
+  <div class="maptools">
+    <button id="tglStations" aria-pressed="true">Stations</button>
+    <button id="fitAll">Show all</button>
+    <button id="fitRoute">Show route</button>
+  </div>
+  <div class="legend" id="legend" aria-label="Show or hide categories"></div>
+  <div class="gsearch">
+    <form class="bar" id="gform" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input id="gq" type="search" placeholder="Search any place in Japan" aria-label="Search places" autocomplete="off"><button class="go" type="submit">Search</button></form>
+    <div class="gresults" id="gres" hidden></div>
+  </div>
+  <aside class="sheet" id="sheet" hidden aria-label="Place details"></aside>
+  <div class="picking" id="pickingMsg" hidden>Tap the map to place the pin</div>
+</main>
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Photo">
+  <img id="lbImg" alt="">
+  <div class="cap" id="lbCap"></div>
+  <div class="row2">
+    <button class="btn ghost" id="lbPrev">Previous</button>
+    <button class="btn ghost" id="lbNext">Next</button>
+    <button class="btn danger" id="lbDel">Delete photo</button>
+    <button class="btn" id="lbClose">Close</button>
+  </div>
+</div>
+<input type="file" id="photoInput" accept="image/*" multiple hidden>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+const ICONS={
+  anchor:'<circle cx="12" cy="5" r="2"/><path d="M12 7v13M8 11h8M5 14c0 3.5 3 6 7 6s7-2.5 7-6"/>',
+  food:'<path d="M3 15c0-4.5 4-8 9-8s9 3.5 9 8c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2z"/><path d="M8 8.6l1.2 3.2M12 7v3.6M16 8.6l-1.2 3.2"/>',
+  shopping:'<path d="M5 8h14l-1.2 12H6.2z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+  fun:'<path d="M12 3l2.3 5.4 5.7.6-4.3 3.9 1.3 5.8L12 15.8l-5 2.9 1.3-5.8L4 9l5.7-.6z"/>',
+  anime:'<rect x="5" y="8" width="14" height="11" rx="2.5"/><path d="M12 8V4.5M10.5 4.5h3M9.5 12.5v1M14.5 12.5v1M9.5 16h5"/>',
+  nature:'<path d="M2.5 19L9 8.5l3 4.5 2.2-3L21.5 19z"/><path d="M7.4 11l1.6 1.2 1.6-1.2"/>',
+  culture:'<path d="M3 6.5c4 1.3 14 1.3 18 0M5 10h14M7 7.5V20M17 7.5V20M12 10v3"/>',
+  onsen:'<path d="M4 15.5c0 2.8 3.6 4.5 8 4.5s8-1.7 8-4.5"/><path d="M8 13c-1.1-1.4 1.1-2.6 0-4s1.1-2.6 0-4M12 13c-1.1-1.4 1.1-2.6 0-4s1.1-2.6 0-4M16 13c-1.1-1.4 1.1-2.6 0-4s1.1-2.6 0-4"/>',
+  housing:'<path d="M3 19V6M3 15h18v4M21 15v-2.5A2.5 2.5 0 0 0 18.5 10H11v5"/><circle cx="7" cy="12" r="1.8"/>',
+  other:'<path d="M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10z"/><circle cx="12" cy="11" r="2"/>'
+};
+const CATS={
+  anchor:{label:'Anchor',color:'#1C2230'},
+  food:{label:'Food',color:'#F39700'},
+  shopping:{label:'Shopping',color:'#E60012'},
+  fun:{label:'Fun',color:'#00A7DB'},
+  anime:{label:'Anime',color:'#9B7CB6'},
+  nature:{label:'Nature',color:'#009944'},
+  culture:{label:'Culture',color:'#BB641D'},
+  onsen:{label:'Onsen',color:'#00ADA9'},
+  housing:{label:'Housing',color:'#1F3A93'},
+  other:{label:'Other',color:'#9CAEB7'}
+};
+const av=(cat,size)=>{const c=CATS[cat]||CATS.other;return `<span class="av${cat==='anchor'?' anchor':''}" style="--c:${c.color}${size?';--s:'+size+'px':''}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[cat]||ICONS.other}</svg></span>`};
+const STATIONS=[
+ ['Tokyo',35.6812,139.7671,'JR lines, Shinkansen, Marunouchi'],
+ ['Bus Terminal Tokyo Yaesu',35.6791,139.7687,'Highway buses incl. Mt. Fuji / Kawaguchiko'],
+ ['Yurakucho',35.6751,139.7630,'JR Yamanote, Yurakucho'],
+ ['Ginza',35.6717,139.7650,'Ginza, Marunouchi, Hibiya'],
+ ['Higashi-ginza',35.6694,139.7671,'Hibiya, Asakusa'],
+ ['Ginza-itchome',35.6743,139.7672,'Yurakucho'],
+ ['Shimbashi',35.6663,139.7583,'JR, Ginza, Asakusa, Yurikamome'],
+ ['Kyobashi',35.6769,139.7701,'Ginza'],
+ ['Takaracho',35.6755,139.7718,'Asakusa'],
+ ['Nihombashi',35.6820,139.7740,'Ginza, Tozai, Asakusa'],
+ ['Mitsukoshimae',35.6862,139.7736,'Ginza, Hanzomon'],
+ ['Kodemmacho',35.6907,139.7785,'Hibiya'],
+ ['Ningyocho',35.6860,139.7823,'Hibiya, Asakusa'],
+ ['Hatchobori',35.6749,139.7775,'JR Keiyo, Hibiya'],
+ ['Tsukiji',35.6680,139.7722,'Hibiya'],
+ ['Otemachi',35.6855,139.7640,'Marunouchi, Tozai, Chiyoda, Hanzomon, Mita'],
+ ['Hibiya',35.6749,139.7597,'Hibiya, Chiyoda, Mita'],
+ ['Kanda',35.6918,139.7709,'JR, Ginza'],
+ ['Akihabara',35.6984,139.7731,'JR, Hibiya, Tsukuba Express'],
+ ['Okachimachi',35.7075,139.7748,'JR Yamanote'],
+ ['Ueno',35.7138,139.7773,'JR, Ginza, Hibiya'],
+ ['Inaricho',35.7110,139.7824,'Ginza'],
+ ['Tawaramachi',35.7101,139.7899,'Ginza'],
+ ['Asakusa',35.7106,139.7977,'Ginza, Asakusa, Tobu'],
+ ['Ryogoku',35.6962,139.7934,'JR Sobu, Oedo'],
+ ['Oshiage (Skytree)',35.7101,139.8134,'Hanzomon, Asakusa, Tobu'],
+ ['Hikifune',35.7179,139.8166,'Tobu Skytree Line'],
+ ['Kamiyacho',35.6628,139.7453,'Hibiya'],
+ ['Toranomon Hills',35.6672,139.7490,'Hibiya'],
+ ['Onarimon',35.6594,139.7510,'Mita'],
+ ['Hamamatsucho',35.6553,139.7571,'JR, Monorail to Haneda'],
+ ['Toyosu',35.6553,139.7963,'Yurakucho, Yurikamome'],
+ ['Shin-toyosu',35.6485,139.7898,'Yurikamome'],
+ ['Daiba',35.6259,139.7715,'Yurikamome'],
+ ['Tokyo Teleport',35.6273,139.7787,'Rinkai'],
+ ['Shinagawa',35.6285,139.7387,'JR, Keikyu to Haneda'],
+ ['Oi Keibajo-mae',35.5951,139.7473,'Tokyo Monorail'],
+ ['Togoshi-ginza',35.6159,139.7147,'Tokyu Ikegami'],
+ ['Togoshi',35.6146,139.7169,'Asakusa'],
+ ['Kamata',35.5625,139.7160,'JR Keihin-Tohoku, Tokyu'],
+ ['Ebisu',35.6467,139.7101,'JR, Hibiya'],
+ ['Naka-meguro',35.6442,139.6989,'Hibiya, Tokyu Toyoko'],
+ ['Shibuya',35.6580,139.7016,'JR, Ginza, Hanzomon, Fukutoshin'],
+ ['Harajuku / Meiji-jingumae',35.6702,139.7027,'JR Yamanote, Chiyoda, Fukutoshin'],
+ ['Shinjuku',35.6896,139.7006,'JR, Marunouchi, Oedo'],
+ ['Busta Shinjuku (bus terminal)',35.6887,139.7010,'Highway buses to Kawaguchiko'],
+ ['Nakano',35.7058,139.6657,'JR Chuo, Tozai'],
+ ['Todoroki',35.6082,139.6481,'Tokyu Oimachi'],
+ ['Haneda Airport T3',35.5448,139.7685,'Keikyu, Monorail'],
+ ['Kawaguchiko',35.4983,138.7688,'Fujikyu, highway buses from Tokyo'],
+ ['Mt. Fuji (Fujisan)',35.4845,138.7952,'Fujikyu']
+].map(([name,lat,lng,lines])=>({name,lat,lng,lines}));
+const ANCHORS=[
+ ['anchor','Tokyo Station',35.6812,139.7671,'Main hub: JR lines, Shinkansen, Marunouchi line.','want'],
+ ['anchor','Clinic (VORT Tokyo Yaesu Maxim)',35.6829532,139.770971,'1-3-18 Yaesu, 3F. About 5 min walk from Tokyo Station Yaesu exit, 2 min from Nihombashi Station.','booked'],
+ ['anchor','Bus Terminal Tokyo Yaesu',35.6790513,139.7686916,'Highway buses incl. Mt. Fuji and Kawaguchiko. Tokyo Midtown Yaesu, B1 and B2.','want'],
+ ['anchor','Haneda Airport (Terminal 3)',35.5448,139.7685,'International terminal. Keikyu line or monorail into the city.','want']
+];
+const SEED=[...ANCHORS,
+ ['housing','Dormy Inn PREMIUM Ginza',35.6676219,139.7657268,'Top pick. Rooftop onsen, free late-night ramen. Chuo ward.','want',true],
+ ['housing','Dormy Inn PREMIUM Kodenmacho',35.6903542,139.7781281,'Onsen + sauna. Hibiya line straight to Akihabara, Ueno, Ginza.','want'],
+ ['housing','Dormy Inn Tokyo Hatchobori',35.6744295,139.7807357,'Indoor + outdoor onsen, quieter area.','want'],
+ ['housing','VIA INN PRIME Nihonbashi Ningyocho',35.685108,139.7801177,'Backup. No onsen, direct train to Asakusa + Haneda.','maybe'],
+ ['onsen','HOSHINOYA Tokyo',35.6875834,139.7650244,'Luxury ryokan in the city, rooftop hot spring.','maybe'],
+ ['onsen','Fuji Kawaguchiko Onsen Konansou',35.5036357,138.7684111,'Lakeside ryokan, private-onsen rooms, kaiseki dinner.','maybe'],
+ ['onsen','Fuji Onsenji Yumedono',35.5054861,138.7596238,'Every room has a private outdoor onsen. Splurge.','maybe'],
+ ['onsen','Fujisan Onsen Hotel Kaneyamaen',35.4667086,138.8133878,'Fuji-view rooms with private onsen, free station shuttle.','maybe'],
+ ['onsen','Fuji View Hotel',35.5083717,138.7385831,'Classic Fuji-view hotel with onsen and gardens.','maybe'],
+ ['nature','Lake Kawaguchiko north shore',35.5170,138.7550,'Mt. Fuji views across the lake.','want'],
+ ['nature','Todoroki Valley',35.6038976,139.6462372,'Forest ravine walk. Open 9 to 4:30. Bug spray.','maybe'],
+ ['food','Seafood Buffet Dining Ginza Happo',35.6672123,139.7618203,'About ¥13,000 all-you-can-eat. 2-hour limit.','want'],
+ ['food','Drawing House of Hibiya',35.6736991,139.7588756,'Midtown Hibiya 6F, terrace views.','want'],
+ ['food','Ninja Tokyo',35.6845764,139.7675608,'Ninja dinner show. Closed Sunday. Book early.','want'],
+ ['food','Hatsunezushi (Kamata)',35.565543,139.7145459,'About ¥22,000 omakase, formerly 2 Michelin stars. Closed Wed + Sun.','want'],
+ ['food','Hatsune Sushi (Ueno)',35.702902,139.780043,'150-year-old family sushi bar. Cash only.','maybe'],
+ ['food',"I'm donut? Nakameguro",35.6444289,139.6993495,'Original shop. Cashless.','want'],
+ ['food',"I'm donut? Shibuya",35.6609389,139.7075502,'Gluten-free location.','maybe'],
+ ['shopping','Nakano Broadway',35.7092475,139.6656524,'Vintage watches and collectibles.','want'],
+ ['shopping','Indigo Ninja Tokyo',35.7147634,139.8016986,'Kimono tabi shoes, 5 min from Senso-ji.','want'],
+ ['shopping','Marugo Tokyo (tabi shoes)',35.6777846,139.7737783,'Tabi shoes in Kyobashi. Closed Wednesday.','maybe'],
+ ['shopping','Daruma Jeans (Harajuku)',35.6698768,139.7031797,'Make your own jeans. Book ahead.','want'],
+ ['shopping','Betty Smith GINZA',35.6730371,139.76345,'Make-your-own jeans closer to the hotel. Book ahead.','maybe'],
+ ['shopping','Kappabashi Kitchen Town',35.7105797,139.7879645,'Many shops closed weekends. Bring cash.','want'],
+ ['shopping','Togoshi Ginza Shopping Street',35.6152718,139.7168419,'Local street food. Go after 10am.','want'],
+ ['shopping','Tokyo City Flea Market (Oi Racecourse)',35.5949798,139.7430414,'Weekends. Bring cash and a bag.','want'],
+ ['shopping','Oedo Antique Market',35.6773272,139.7645021,'Usually 1st and 3rd Sunday. Check the official site.','maybe'],
+ ['shopping','Ameyoko (Ueno)',35.7100682,139.7746009,'Ueno market street. Confirm antique market dates.','maybe'],
+ ['fun','teamLab Planets',35.6491207,139.7897739,'You wade in water barefoot. Closed Thursday.','want'],
+ ['fun','teamLab Borderless',35.6620689,139.7432671,'Azabudai Hills. Timed tickets.','want'],
+ ['fun','cafe capyba',35.7199925,139.8143766,'Capybara cafe near Skytree. Limited days, reserve.','maybe'],
+ ['fun','Capybara Onsen Moffu (Harajuku)',35.6708911,139.7056525,'Capybaras in hot tubs. Open daily.','want'],
+ ['anime','The Gundam Base Tokyo',35.6254768,139.7761383,'Statue outside was removed Aug 31, 2026. Some days lottery entry.','maybe'],
+ ['anime','EXBAR TOKYO plus (Square Enix)',35.6981277,139.772964,'Square Enix cafe in Akihabara. Closest match for Sephiroth.','want'],
+ ['culture','Senso-ji',35.7147651,139.7966553,'Go early to beat the crowds.','want'],
+ ['culture','Atago Shrine',35.6647441,139.7484681,'Pair with teamLab Borderless. Gentler side stairs.','want'],
+ ['culture','Edo-Tokyo Museum',35.6965972,139.7957336,'Ryogoku. Closed Monday. Buy tickets online.','want']
+];
+const ADDR={
+ 'Tokyo Station':'1-9-1 Marunouchi, Chiyoda City, Tokyo 100-0005, Japan',
+ 'Clinic (VORT Tokyo Yaesu Maxim)':'VORT Tokyo Yaesu Maxim 3F, 1-3-18 Yaesu, Chuo City, Tokyo 103-0028, Japan',
+ 'Bus Terminal Tokyo Yaesu':'Tokyo Midtown Yaesu B1-B2F, 2-2-1 Yaesu, Chuo City, Tokyo 104-0028, Japan',
+ 'Haneda Airport (Terminal 3)':'2-6-5 Hanedakuko, Ota City, Tokyo 144-0041, Japan',
+ 'Dormy Inn PREMIUM Ginza':'6-16-8 Ginza, Chuo City, Tokyo 104-0061, Japan',
+ 'Dormy Inn PREMIUM Kodenmacho':'2-3 Nihonbashikodenmacho, Chuo City, Tokyo 103-0001, Japan',
+ 'Dormy Inn Tokyo Hatchobori':'2-20-4 Shinkawa, Chuo City, Tokyo 104-0033, Japan',
+ 'VIA INN PRIME Nihonbashi Ningyocho':'16-12 Nihonbashikoamicho, Chuo City, Tokyo 103-0016, Japan',
+ 'HOSHINOYA Tokyo':'1-9-1 Otemachi, Chiyoda City, Tokyo 100-0004, Japan',
+ 'Fuji Kawaguchiko Onsen Konansou':'4020 Funatsu, Fujikawaguchiko, Minamitsuru District, Yamanashi 401-0301, Japan',
+ 'Fuji Onsenji Yumedono':'6677 Funatsu, Fujikawaguchiko, Minamitsuru District, Yamanashi 401-0301, Japan',
+ 'Fujisan Onsen Hotel Kaneyamaen':'9-1-18 Kamiyoshidahigashi, Fujiyoshida, Yamanashi 403-0032, Japan',
+ 'Fuji View Hotel':'511 Katsuyama, Fujikawaguchiko, Minamitsuru District, Yamanashi 401-0310, Japan',
+ 'Todoroki Valley':'1-22-26 Todoroki, Setagaya City, Tokyo 158-0082, Japan',
+ 'Seafood Buffet Dining Ginza Happo':'B1, 8-6-10 Ginza, Chuo City, Tokyo 104-0061, Japan',
+ 'Drawing House of Hibiya':'Tokyo Midtown Hibiya 6F, 1-1-2 Yurakucho, Chiyoda City, Tokyo, Japan',
+ 'Ninja Tokyo':'Shin-Otemachi Building B1F, 2-2-1 Otemachi, Chiyoda City, Tokyo 100-0004, Japan',
+ 'Hatsunezushi (Kamata)':'5-20-2 Nishikamata, Ota City, Tokyo 144-0051, Japan',
+ 'Hatsune Sushi (Ueno)':'L Place Hatsune, 2-15-2 Taito, Taito City, Tokyo 110-0016, Japan',
+ "I'm donut? Nakameguro":'1-22-10 Kamimeguro, Meguro City, Tokyo 153-0051, Japan',
+ "I'm donut? Shibuya":'2-9-1 Shibuya, Shibuya City, Tokyo 150-0002, Japan',
+ 'Nakano Broadway':'5-52-15 Nakano, Nakano City, Tokyo 164-0001, Japan',
+ 'Indigo Ninja Tokyo':'2-15-6 Hanakawado, Taito City, Tokyo 111-0033, Japan',
+ 'Marugo Tokyo (tabi shoes)':'Shobi Kyobashi Daini Building 1F, 1-17-1 Kyobashi, Chuo City, Tokyo 104-0031, Japan',
+ 'Daruma Jeans (Harajuku)':'Harajuku TW Building 4F, 1-14-24 Jingumae, Shibuya City, Tokyo 150-0001, Japan',
+ 'Betty Smith GINZA':'Nishiginza B2F, 4-1-1 Ginza, Chuo City, Tokyo 104-0061, Japan',
+ 'Kappabashi Kitchen Town':'3-18-2 Matsugaya, Taito City, Tokyo 110-0036, Japan',
+ 'Togoshi Ginza Shopping Street':'1-15-16 Togoshi, Shinagawa City, Tokyo 142-0041, Japan',
+ 'Tokyo City Flea Market (Oi Racecourse)':'2-1-1 Katsushima, Shinagawa City, Tokyo 140-0012, Japan',
+ 'Oedo Antique Market':'3-5-5 Marunouchi, Chiyoda City, Tokyo 100-0005, Japan',
+ 'Ameyoko (Ueno)':'6-10-7 Ueno, Taito City, Tokyo 110-0005, Japan',
+ 'teamLab Planets':'6-1-16 Toyosu, Koto City, Tokyo 135-0061, Japan',
+ 'teamLab Borderless':'Azabudai Hills Garden Plaza B, B1, 5-9-9 Toranomon, Minato City, Tokyo 106-0041, Japan',
+ 'cafe capyba':'1-31-3 Higashimukojima, Sumida City, Tokyo 131-0032, Japan',
+ 'Capybara Onsen Moffu (Harajuku)':'Om169 Building 1F, 1-6-9 Jingumae, Shibuya City, Tokyo 150-0001, Japan',
+ 'The Gundam Base Tokyo':'DiverCity Tokyo Plaza 7F, 1-1-10 Aomi, Koto City, Tokyo 135-0064, Japan',
+ 'EXBAR TOKYO plus (Square Enix)':'1-6-1 Kanda Sakumacho, Chiyoda City, Tokyo 101-0025, Japan',
+ 'Senso-ji':'2-3-1 Asakusa, Taito City, Tokyo 111-0032, Japan',
+ 'Atago Shrine':'1-5-3 Atago, Minato City, Tokyo 105-0002, Japan',
+ 'Edo-Tokyo Museum':'1-4-1 Yokoami, Sumida City, Tokyo 130-0015, Japan'
+};
+const KEY='tokyo-planner-v1';
+const uid=()=>Math.random().toString(36).slice(2,9);
+const mkPlace=([cat,name,lat,lng,notes,status])=>({id:uid(),cat,name,lat,lng,notes,status,photos:[],address:ADDR[name]||''});
+function seedState(){
+  const places=SEED.map(mkPlace);
+  const homeId=places[SEED.findIndex(r=>r[6])].id;
+  return {v:4,places,homeId,queue:[],days:[{id:uid(),name:'Day 1',stops:[],modes:{},loop:true}],activeDay:0,hidden:[]};
+}
+function migrate(s){
+  s.favOnly??=false;
+  s.hidden??=[];s.queue??=[];s.days??=[{id:uid(),name:'Day 1',stops:[],modes:{},loop:true}];
+  s.days.forEach(d=>{d.id??=uid();d.modes??={};d.stops??=[];});
+  if(!s.v||s.v<2){ANCHORS.forEach(r=>{if(!s.places.some(p=>p.name===r[1]))s.places.unshift(mkPlace(r));});}
+  s.places.forEach(p=>{p.photos??=[];p.notes??='';if(!p.address&&ADDR[p.name])p.address=ADDR[p.name];p.address??='';});
+  s.v=4;
+  return s;
+}
+let S;
+try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+S=(S&&Array.isArray(S.places))?migrate(S):seedState();
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('Could not save. Browser storage is full.');}}
+
+/* ---------- photo storage (IndexedDB) ---------- */
+const idb=(()=>{let dbp;
+  const db=()=>dbp??=new Promise((res,rej)=>{const r=indexedDB.open('tokyo-planner',1);r.onupgradeneeded=()=>r.result.createObjectStore('photos');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
+  const run=async(mode,fn)=>{const d=await db();return new Promise((res,rej)=>{const t=d.transaction('photos',mode);const req=fn(t.objectStore('photos'));t.oncomplete=()=>res(req.result);t.onerror=()=>rej(t.error);});};
+  return {get:k=>run('readonly',s=>s.get(k)),set:(k,v)=>run('readwrite',s=>s.put(v,k)),del:k=>run('readwrite',s=>s.delete(k))};
+})();
+const purl={};
+async function photoURL(pid){if(purl[pid])return purl[pid];try{const b=await idb.get(pid);if(!b)return null;return purl[pid]=URL.createObjectURL(b);}catch(e){return null;}}
+function hydrate(root){root.querySelectorAll('img[data-photo]:not([src])').forEach(async img=>{const u=await photoURL(img.dataset.photo);if(u)img.src=u;else img.remove();});}
+async function shrink(file,max=1400){
+  const url=URL.createObjectURL(file);
+  try{
+    const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=url;});
+    const k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+    const c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    return await new Promise(r=>c.toBlob(r,'image/jpeg',.82));
+  }finally{URL.revokeObjectURL(url);}
+}
+let photoTarget=null;
+
+/* ---------- geometry + estimates ---------- */
+const R=3958.8;
+function miles(a,b){const t=Math.PI/180,dLat=(b.lat-a.lat)*t,dLng=(b.lng-a.lng)*t;const h=Math.sin(dLat/2)**2+Math.cos(a.lat*t)*Math.cos(b.lat*t)*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
+function nearestStation(p){let best=null,bd=1e9;for(const s of STATIONS){if(s.name.startsWith('Bus Terminal')||s.name.startsWith('Busta'))continue;const d=miles(p,s);if(d<bd){bd=d;best=s}}return {s:best,d:bd};}
+const WALK_MPH=3,STREET=1.25;
+const walkMi=d=>d*STREET,walkMin=d=>d*STREET/WALK_MPH*60;
+const fmtMi=m=>m<0.1?'<0.1 mi':m.toFixed(m<10?1:0)+' mi';
+const fmtMin=m=>{m=Math.round(m);return m<60?m+' min':Math.floor(m/60)+' h'+(m%60?' '+m%60+' min':'')};
+const stn=n=>STATIONS.find(s=>s.name===n);
+
+/* ---------- street routing (sidewalks for walking, roads for buses/taxis) ---------- */
+const RKEY='tokyo-planner-routes';
+let RC={};try{RC=JSON.parse(localStorage.getItem(RKEY))||{}}catch(e){}
+const GEO={},PENDING={},FAIL={};
+const OSRM={foot:'https://routing.openstreetmap.de/routed-foot/route/v1/foot/',car:'https://routing.openstreetmap.de/routed-car/route/v1/driving/'};
+const ck=(prof,a,b)=>`${prof}:${(+a.lat).toFixed(5)},${(+a.lng).toFixed(5)};${(+b.lat).toFixed(5)},${(+b.lng).toFixed(5)}`;
+let rcT;function saveRC(){clearTimeout(rcT);rcT=setTimeout(()=>{try{localStorage.setItem(RKEY,JSON.stringify(RC))}catch(e){}},600);}
+let soonT;function soon(){clearTimeout(soonT);soonT=setTimeout(()=>{renderList();renderGroups();renderRoute();refreshPopup();},300);}
+const jobs=[];let active=0;
+function pump(){while(active<3&&jobs.length){const j=jobs.shift();active++;j().finally(()=>{active--;pump();});}}
+function street(prof,a,b,needGeo){
+  if(miles(a,b)<0.005)return {mi:0,min:0};
+  const k=ck(prof,a,b);
+  if(FAIL[k])return {fail:1};
+  const c=RC[k];
+  if(c&&(!needGeo||GEO[k]))return c;
+  if(!PENDING[k]){
+    PENDING[k]=1;
+    jobs.push(async()=>{
+      try{
+        const r=await fetch(`${OSRM[prof]}${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`);
+        const j=await r.json();const rt=j.routes&&j.routes[0];
+        if(!rt)throw 0;
+        RC[k]={mi:rt.distance/1609.344,min:rt.duration/60};
+        GEO[k]=rt.geometry.coordinates.map(([x,y])=>[y,x]);saveRC();
+      }catch(e){if(!RC[k])FAIL[k]=1;}
+      delete PENDING[k];soon();
+    });
+    pump();
+  }
+  return c||null;
+}
+const geo=(prof,a,b)=>GEO[ck(prof,a,b)];
+function homeDist(p){
+  const h=byId(S.homeId);if(!h)return null;
+  if(h.id===p.id)return {home:1};
+  return street('foot',h,p);
+}
+function homeText(p){
+  const r=homeDist(p);
+  if(!r)return byId(S.homeId)?'Measuring street distance from home…':'';
+  if(r.home)return 'Your home base';
+  if(r.fail)return 'Street distance unavailable right now';
+  return `${fmtMi(r.mi)} from home`;
+}
+const stepOf=(t,txt,r,extra)=>r?(r.fail?{t,txt,fail:1,...extra}:{t,txt,mi:r.mi,min:r.min,...extra}):{t,txt,pending:1,...extra};
+function legPlan(a,b,mode){
+  const d=miles(a,b),sa=nearestStation(a).s,sb=nearestStation(b).s;
+  const walkAB=()=>stepOf('Walk',`to ${b.name}`,street('foot',a,b),{prof:'foot',a,b});
+  if(mode==='auto'){
+    if(d>40)mode='highway';
+    else{const w=street('foot',a,b);mode=w&&!w.fail?(w.mi<=1?'walk':'train'):(d<=0.8?'walk':'train');}
+  }
+  if(mode==='walk')return finish({mode:'walk',steps:[walkAB()]},a,b);
+  if(mode==='highway'||(d>40&&mode==='train')){
+    const c={lat:35.68,lng:139.75};
+    const tokyoSide=miles(a,c)<miles(b,c)?a:b;
+    const yaesu=stn('Bus Terminal Tokyo Yaesu'),busta=stn('Busta Shinjuku (bus terminal)');
+    const term=miles(tokyoSide,yaesu)<=miles(tokyoSide,busta)?yaesu:busta;
+    const kaw=stn('Kawaguchiko');
+    const [from,to]=tokyoSide===a?[term,kaw]:[kaw,term];
+    const steps=[];
+    const getTo=(x,y,label)=>{
+      if(miles(x,y)<0.02)return;
+      if(miles(x,y)<1.2)steps.push(stepOf('Walk',`to ${label}`,street('foot',x,y),{prof:'foot',a:x,b:y}));
+      else steps.push(stepOf('Taxi',`to ${label}`,street('car',x,y),{prof:'car',a:x,b:y}));
+    };
+    getTo(a,from,from.name);
+    const bus=street('car',from,to);
+    steps.push(bus&&!bus.fail?{t:'Bus',txt:`Highway bus ${from.name} to ${to.name}. Book seats ahead`,mi:bus.mi,min:bus.min*1.15+10,prof:'car',a:from,b:to}:stepOf('Bus',`Highway bus ${from.name} to ${to.name}`,bus,{prof:'car',a:from,b:to}));
+    getTo(to,b,b.name);
+    return finish({mode:'highway',steps},a,b);
+  }
+  if(mode==='bus'){
+    const r=street('car',a,b);
+    const main=r&&!r.fail?{t:'Bus',txt:'City bus. Check the exact route in Google Maps',mi:r.mi,min:r.mi/9*60+8,prof:'car',a,b}:stepOf('Bus','City bus',r,{prof:'car',a,b});
+    return finish({mode:'bus',steps:[{t:'Walk',txt:'to the nearest bus stop',min:4,nomi:1},main,{t:'Walk',txt:`to ${b.name}`,min:4,nomi:1}]},a,b);
+  }
+  if(sa===sb)return finish({mode:'walk',steps:[walkAB()]},a,b);
+  const rail=miles(sa,sb)*1.3;
+  const plan=finish({mode:'train',sa,sb,steps:[
+    stepOf('Walk',`to ${sa.name} Stn`,street('foot',a,sa),{prof:'foot',a,b:sa}),
+    {t:'Train',txt:`${sa.name} to ${sb.name}`,mi:rail,min:rail/17*60+7,rail:1},
+    stepOf('Walk',`to ${b.name}`,street('foot',sb,b),{prof:'foot',a:sb,b})]},a,b);
+  const w=street('foot',a,b);
+  if(!plan.pending&&w&&!w.fail&&w.mi<1.6&&w.min<=plan.min+4)return finish({mode:'walk',steps:[walkAB()]},a,b);
+  return plan;
+}
+function finish(p,a,b){
+  p.a=a;p.b=b;
+  p.pending=p.steps.some(x=>x.pending);p.fail=p.steps.some(x=>x.fail);
+  p.mi=p.steps.reduce((s,x)=>s+(x.mi||0),0);p.min=p.steps.reduce((s,x)=>s+(x.min||0),0);
+  return p;
+}
+const gmaps=(a,b,m)=>`https://www.google.com/maps/dir/?api=1&origin=${a.lat},${a.lng}&destination=${b.lat},${b.lng}&travelmode=${m==='walk'?'walking':'transit'}`;
+
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const byId=id=>S.places.find(p=>p.id===id);
+const day=()=>S.days[S.activeDay]||S.days[0];
+const daysOf=id=>S.days.filter(d=>d.stops.includes(id));
+const onTrip=id=>daysOf(id).length>0;
+const visible=p=>!S.hidden.includes(p.cat)&&(!S.favOnly||p.fav);
+const avf=(p,size)=>av(p.cat,size).replace('class="av','class="av'+(p.fav?' fav':''));
+const COPY_ICON='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+const ADDR_TRIED={};let addrBusy=false;
+async function reverseAddr(lat,lng){
+  const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&zoom=18&accept-language=en&lat=${lat}&lon=${lng}`);
+  const j=await r.json();return j.display_name||'';
+}
+async function fillAddresses(){
+  if(addrBusy)return;addrBusy=true;
+  for(const p of S.places){
+    if(p.address||ADDR_TRIED[p.id])continue;
+    ADDR_TRIED[p.id]=1;
+    try{const a=await reverseAddr(p.lat,p.lng);if(a&&!p.address){p.address=a;save();soon();}}catch(e){}
+    await new Promise(r=>setTimeout(r,1200));
+  }
+  addrBusy=false;
+}
+function addrHtml(p,editable){
+  const has=!!p.address;
+  const txt=has?esc(p.address):(ADDR_TRIED[p.id]?'No address found. Double-click to add one.':'Looking up address…');
+  return `<div class="addr">${has?`<button class="copy" data-copy="${p.id}" onclick="app.copyAddr('${p.id}',event)" aria-label="Copy address of ${esc(p.name)}" title="Copy address">${COPY_ICON}</button>`:''}<span class="txt${has?'':' none'}${editable?' editable':''}"${editable?` data-edit="address" data-id="${p.id}" title="Double-click to edit the address"`:''}>${txt}</span></div>`;
+}
+async function copyText(t){
+  try{await navigator.clipboard.writeText(t);return true;}catch(e){
+    const ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+    let ok=false;try{ok=document.execCommand('copy');}catch(err){}ta.remove();return ok;}
+}
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),2400);}
+
+/* ---------- map ---------- */
+const map=L.map('map',{zoomControl:false,doubleClickZoom:true}).setView([35.685,139.77],12);
+L.control.zoom({position:'bottomright'}).addTo(map);
+const EN=['coalesce',['get','name:en'],['get','name_en'],['get','name:latin'],['get','name']];
+function englishify(m){
+  const st=m.getStyle();if(!st)return;
+  for(const l of st.layers){
+    if(l.type!=='symbol')continue;
+    if(/poi|housenumber|aerodrome_label/.test(l.id)){try{m.setLayoutProperty(l.id,'visibility','none')}catch(e){}continue;}
+    const tf=l.layout&&l.layout['text-field'];if(!tf)continue;
+    const s=JSON.stringify(tf);
+    if(s.includes('name')&&!s.includes('ref'))try{m.setLayoutProperty(l.id,'text-field',EN)}catch(e){}
+  }
+}
+function rasterFallback(){L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);}
+function loadScript(src){return new Promise((res,rej)=>{const t=document.createElement('script');t.src=src;t.onload=res;t.onerror=rej;document.head.appendChild(t);});}
+async function initBase(){
+  if(window.maplibregl){
+    for(const u of ['https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js','https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js','https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js']){
+      if(L.maplibreGL)break;try{await loadScript(u);}catch(e){}
+    }
+  }
+  if(!L.maplibreGL)return rasterFallback();
+  try{
+    const gl=L.maplibreGL({style:'https://tiles.openfreemap.org/styles/positron',
+      attribution:'<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> &copy; <a href="https://www.openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'}).addTo(map);
+    const m=gl.getMaplibreMap();let ok=false;
+    const go=()=>{ok=true;englishify(m);};
+    if(m.isStyleLoaded&&m.isStyleLoaded())go();else m.once('load',go);
+    setTimeout(()=>{if(!ok){map.removeLayer(gl);rasterFallback();}},15000);
+  }catch(e){rasterFallback();}
+}
+initBase();
+const stationLayer=L.layerGroup().addTo(map);
+STATIONS.forEach(s=>{
+  L.marker([s.lat,s.lng],{icon:L.divIcon({className:'',html:'<div class="stnpin"></div>',iconSize:[12,12],iconAnchor:[6,6]}),keyboard:false,zIndexOffset:-500})
+   .bindTooltip(esc(s.name),{className:'stnlabel',direction:'right',offset:[8,0]})
+   .bindPopup(`<div class="pop"><h3>${esc(s.name)}</h3><p>${esc(s.lines)}</p></div>`).addTo(stationLayer);
+});
+const placeLayer=L.layerGroup().addTo(map),routeLayer=L.layerGroup().addTo(map),linkLayer=L.layerGroup().addTo(map);
+let markers={},selected=null;
+map.on('popupopen',e=>hydrate(e.popup.getElement()));
+
+function routeStops(){
+  const d=day(),h=byId(S.homeId);
+  let list=d.stops.map((id,idx)=>({p:byId(id),idx})).filter(x=>x.p);
+  if(d.loop&&h&&list.length)list=[{p:h,idx:-1},...list,{p:h,idx:-1}];
+  const out=[];
+  for(const x of list){const last=out[out.length-1];if(last&&last.p.id===x.p.id){if(last.idx<0&&x.idx>=0)out[out.length-1]=x;continue;}out.push(x);}
+  return out;
+}
+function renderMarkers(){
+  placeLayer.clearLayers();markers={};
+  const order={};day().stops.forEach((id,i)=>{(order[id]??=[]).push(i+1)});
+  S.places.forEach(p=>{
+    if(!visible(p))return;
+    const n=order[p.id]?`<span class="badge">${order[p.id].join(',')}</span>`:'';
+    const sz=p.cat==='anchor'?36:32;
+    const icon=L.divIcon({className:'',html:`<div class="pin">${avf(p,sz)}${n}</div>`,iconSize:[sz,sz],iconAnchor:[sz/2,sz/2],popupAnchor:[0,-sz/2]});
+    const m=L.marker([p.lat,p.lng],{icon,title:p.name,riseOnHover:true,zIndexOffset:p.cat==='anchor'?400:0}).addTo(placeLayer);
+    m.bindPopup(()=>popupHtml(p));
+    m.on('click',()=>select(p.id,false));
+    m.on('popupopen',()=>{popupPlaceId=p.id;});
+    m.on('popupclose',()=>{if(popupPlaceId===p.id)popupPlaceId=null;});
+    markers[p.id]=m;
+  });
+}
+function tripLabel(id){const ds=[...new Set(daysOf(id).map(d=>d.name))];if(!ds.length)return '';return ds.length>2?`${ds[0]} +${ds.length-1} more`:ds.join(', ');}
+function popupHtml(p){
+  const on=onTrip(p.id),ht=homeText(p);
+  return `<div class="pop">${p.photos.length?`<img class="hero" data-photo="${p.photos[0]}" alt="${esc(p.name)}" onclick="app.lightbox('${p.id}',0)">`:''}<h3>${esc(p.name)}</h3>
+   ${addrHtml(p,false)}
+   <p>${esc(CATS[p.cat]?.label||'Other')}${ht?`. ${esc(ht)}`:''}${on?`. On ${esc(tripLabel(p.id))}`:''}</p>
+   ${p.notes?`<p>${esc(p.notes)}</p>`:''}
+   <select onchange="app.addToDay('${p.id}',this.value)" aria-label="Add ${esc(p.name)} to a day"><option value="">Add to a day…</option>${S.days.map(d=>`<option value="${d.id}">${esc(d.name)}${d.stops.includes(p.id)?' (already on)':''}</option>`).join('')}<option value="new">+ New day</option></select>
+   <div class="row2"><button class="btn" onclick="app.fav('${p.id}')">${p.fav?'★ Favorited':'☆ Favorite'}</button>
+   <button class="btn ghost" onclick="app.directions('${p.id}')">Directions</button>
+   <button class="btn ghost" onclick="app.sheet('${p.id}')">Reviews and photos</button>
+   <button class="btn ghost" onclick="app.addPhoto('${p.id}')">Add photo</button>
+   <button class="btn ghost" onclick="app.edit('${p.id}')">Edit</button></div></div>`;
+}
+function refreshPopup(){if(!popupPlaceId)return;const p=byId(popupPlaceId),m=markers[popupPlaceId];if(!p||!m||!m.isPopupOpen())return;m.getPopup().setContent(popupHtml(p));hydrate(m.getPopup().getElement());}
+function select(id,fly=true){
+  selected=id;linkLayer.clearLayers();
+  const p=byId(id);if(!p)return;
+  if(fly){map.flyTo([p.lat,p.lng],Math.max(map.getZoom(),15),{duration:.6});setTimeout(()=>markers[id]?.openPopup(),650);}
+  document.querySelectorAll('.place').forEach(el=>el.classList.toggle('sel',el.dataset.id===id));
+}
+
+/* ---------- category toggles ---------- */
+function renderChips(){
+  const nf=S.places.filter(p=>p.fav).length;
+  $('#chips').innerHTML=`<button class="chip" data-favonly="1" aria-pressed="${!!S.favOnly}" title="Show only favorites">${favAv(40,S.favOnly)}<span>Favorites <small>${nf}</small></span></button>`+Object.entries(CATS).map(([k,c])=>{
+    const n=S.places.filter(p=>p.cat===k).length;
+    return `<button class="chip" data-cat="${k}" aria-pressed="${!S.hidden.includes(k)}" title="Show or hide ${c.label}">${av(k)}<span>${c.label} <small>${n}</small></span></button>`;
+  }).join('');
+  const fc=$('#favCount');fc.hidden=!nf;fc.textContent=nf;
+  $('#legend').innerHTML=Object.entries(CATS).map(([k,c])=>`<button data-cat="${k}" aria-pressed="${!S.hidden.includes(k)}" aria-label="${S.hidden.includes(k)?'Show':'Hide'} ${c.label}" title="${c.label}">${av(k,30)}</button>`).join('');
+}
+function toggleCat(k){
+  const hide=!S.hidden.includes(k);
+  S.hidden=hide?[...S.hidden,k]:S.hidden.filter(x=>x!==k);
+  save();refresh();toast(`${CATS[k].label} ${hide?'hidden':'shown'}`);
+}
+function favAv(size,on){return `<span class="av" style="--c:#E8B100;--s:${size}px"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.3 5.4 5.7.6-4.3 3.9 1.3 5.8L12 15.8l-5 2.9 1.3-5.8L4 9l5.7-.6z"/></svg></span>`;}
+$('#chips').onclick=e=>{
+  if(e.target.closest('[data-favonly]')){S.favOnly=!S.favOnly;save();refresh();toast(S.favOnly?'Showing favorites only':'Showing all places');return;}
+  const b=e.target.closest('[data-cat]');if(b)toggleCat(b.dataset.cat);};
+$('#legend').onclick=e=>{const b=e.target.closest('[data-cat]');if(b)toggleCat(b.dataset.cat);};
+
+/* ---------- Google places: search, details, photos, reviews ---------- */
+let G_OK=null;const GCACHE={};let gResults=[],searchMarker=null,sheetCtx=null,linkTarget=null;
+function sharedWord(a,b){const w=x=>x.toLowerCase().split(/[^a-z0-9]+/).filter(t=>t.length>3);const A=new Set(w(a));return w(b).some(t=>A.has(t));}
+function nearMatch(r){
+  if(r.lat==null)return null;
+  const c=S.places.filter(p=>p.gid!==r.id).map(p=>({p,d:miles(p,{lat:r.lat,lng:r.lng})})).filter(o=>o.d<0.3).sort((a,b)=>a.d-b.d);
+  const byName=c.find(o=>sharedWord(o.p.name,r.name||''));
+  return (byName||(c[0]&&c[0].d<0.05?c[0]:null))?.p||null;
+}
+function linkPlace(pid){
+  const p=byId(pid);if(!p||!sheetCtx)return;
+  const {r}=sheetCtx,d=r.id&&GCACHE[r.id];
+  if(r.src==='g'){p.gid=r.id;delete p.gtried;}
+  if(!p.address&&(d?.formattedAddress||r.addr))p.address=d?.formattedAddress||r.addr;
+  sheetCtx.mine=p;linkTarget=null;save();refresh();renderSheet(d||null);searchMarker?.remove();searchMarker=null;
+  toast(`Linked. ${p.name} now shows Google photos and reviews.`);
+}
+async function gapi(params){
+  const r=await fetch('/api/places?'+new URLSearchParams(params));
+  if(r.status===503){G_OK=false;throw new Error('not_configured');}
+  if(!r.ok)throw new Error('http '+r.status);
+  G_OK=true;return r.json();
+}
+const gphoto=(name,w)=>`/api/photo?name=${encodeURIComponent(name)}&w=${w||400}`;
+async function gdetails(id){if(GCACHE[id])return GCACHE[id];const j=await gapi({action:'details',id});GCACHE[id]=j;return j;}
+const fmtCount=n=>(n||0).toLocaleString('en-US');
+function guessCat(types){
+  const t=' '+(types||[]).join(' ')+' ';
+  if(/lodging|hotel|hostel|inn |guest_house/.test(t))return /spa|onsen|hot_spring/.test(t)?'onsen':'housing';
+  if(/spa|hot_spring|public_bath|sauna/.test(t))return 'onsen';
+  if(/restaurant|cafe|bakery| bar |food|meal|coffee|dessert|ice_cream|confectionery/.test(t))return 'food';
+  if(/park|natural_feature|hiking|garden|beach|mountain|campground|nature/.test(t))return 'nature';
+  if(/museum|temple|shrine|church|place_of_worship|historical|monument|cultural|art_gallery|landmark/.test(t))return 'culture';
+  if(/amusement|aquarium|zoo|bowling|arcade|movie|night_club|tourist_attraction|event_venue|karaoke/.test(t))return 'fun';
+  if(/store|shop|market|mall|clothing|jewelry|book|supermarket/.test(t))return 'shopping';
+  if(/train_station|subway|transit|airport|bus_station/.test(t))return 'anchor';
+  return 'other';
+}
+function showSearchPin(lat,lng){searchMarker?.remove();searchMarker=L.marker([lat,lng],{icon:L.divIcon({className:'',html:'<div class="searchpin"></div>',iconSize:[22,22],iconAnchor:[11,11]}),zIndexOffset:900}).addTo(map);}
+$('#gform').onsubmit=e=>{e.preventDefault();doSearch();};
+$('#gq').addEventListener('keydown',e=>{if(e.key==='Escape'){$('#gres').hidden=true;}});
+$('#gq').addEventListener('focus',()=>{if($('#gres').innerHTML)$('#gres').hidden=false;});
+async function doSearch(){
+  const q=$('#gq').value.trim();if(!q)return;
+  const c=map.getCenter(),box=$('#gres');box.hidden=false;box.innerHTML='<p class="hint" style="padding:10px 12px;margin:0">Searching…</p>';
+  if(G_OK===false)return osmSearch(q);
+  try{
+    const j=await gapi({action:'search',q,lat:c.lat.toFixed(5),lng:c.lng.toFixed(5)});
+    gResults=(j.places||[]).map(p=>({src:'g',id:p.id,name:p.displayName?.text||'Place',addr:p.formattedAddress||'',lat:p.location?.latitude,lng:p.location?.longitude,rating:p.rating,count:p.userRatingCount,type:p.primaryTypeDisplayName?.text||'',types:p.types||[],photo:p.photos?.[0]?.name}));
+    renderResults();
+  }catch(err){if(G_OK===false){toast('Google is not connected yet, so results come from OpenStreetMap.');osmSearch(q);}else box.innerHTML='<p class="hint" style="padding:10px 12px;margin:0">Search did not work. Check your connection and try again.</p>';}
+}
+async function osmSearch(q){
+  const box=$('#gres');
+  try{const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=8&countrycodes=jp&accept-language=en&q=${encodeURIComponent(q)}`);const j=await r.json();
+    gResults=j.map(x=>({src:'osm',name:x.name||x.display_name.split(',')[0],addr:x.display_name,lat:+x.lat,lng:+x.lon,type:(x.type||'').replace(/_/g,' '),types:[x.type||'']}));
+    renderResults();
+  }catch(e){box.innerHTML='<p class="hint" style="padding:10px 12px;margin:0">Search is unavailable right now.</p>';}
+}
+function renderResults(){
+  const box=$('#gres');
+  if(!gResults.length){box.innerHTML='<p class="hint" style="padding:10px 12px;margin:0">No places found. Try another name or spelling.</p>';return;}
+  const lt=linkTarget&&byId(linkTarget);
+  box.innerHTML=(lt?`<div class="linkhead"><span>Pick the result that matches <b>${esc(lt.name)}</b></span><button type="button" data-cancel-link="1">Cancel</button></div>`:'')+gResults.map((r,i)=>`<button type="button" data-gi="${i}">${r.photo?`<img src="${gphoto(r.photo,120)}" alt="" loading="lazy">`:'<span class="noimg"></span>'}<span><b>${esc(r.name)}</b>${r.rating?`<small><span class="stars">★ ${r.rating.toFixed(1)}</span> (${fmtCount(r.count)})${r.type?', '+esc(r.type):''}</small>`:r.type?`<small>${esc(r.type)}</small>`:''}<small>${esc(r.addr)}</small></span></button>`).join('');
+}
+$('#gres').onclick=e=>{if(e.target.closest('[data-cancel-link]')){linkTarget=null;renderResults();return;}const b=e.target.closest('[data-gi]');if(!b)return;const r=gResults[+b.dataset.gi];$('#gres').hidden=true;openResult(r);};
+async function openResult(r){
+  if(r.lat!=null){showSearchPin(r.lat,r.lng);map.flyTo([r.lat,r.lng],Math.max(map.getZoom(),16),{duration:.6});}
+  const mine=linkTarget?null:S.places.find(p=>(r.id&&p.gid===r.id));
+  sheetCtx={r,mine};
+  if(r.src==='g'){renderSheet(null,true);try{const d=await gdetails(r.id);if(sheetCtx?.r===r)renderSheet(d);}catch(e){renderSheet(null);}}
+  else renderSheet(null);
+}
+async function openPlaceSheet(id){
+  const p=byId(id);if(!p)return;
+  sheetCtx={r:{src:p.gid?'g':'osm',id:p.gid,name:p.name,addr:p.address,lat:p.lat,lng:p.lng,types:[]},mine:p};
+  map.closePopup();
+  if(p.gid){renderSheet(null,true);try{const d=await gdetails(p.gid);if(sheetCtx?.mine===p)renderSheet(d);}catch(e){renderSheet(null);}}
+  else renderSheet(null);
+}
+function renderSheet(d,loading){
+  const {r}=sheetCtx;const mine=sheetCtx.mine||(!linkTarget&&d&&S.places.find(p=>p.gid===d.id));
+  const name=d?.displayName?.text||r.name,addr=d?.formattedAddress||r.addr||'';
+  const photos=(d?.photos||[]).slice(0,5);
+  const authors=[...new Set(photos.flatMap(ph=>(ph.authorAttributions||[]).map(a=>a.displayName)).filter(Boolean))];
+  const types=d?.types||r.types||[];const guess=guessCat(types);
+  const reviews=d?.reviews||[];
+  const hours=d?.regularOpeningHours?.weekdayDescriptions||[];
+  const el=$('#sheet');el.hidden=false;
+  el.innerHTML=`<button class="x" data-sheet="close" aria-label="Close">✕</button>
+   ${photos.length?`<div class="gal">${photos.map((ph,i)=>`<img src="${gphoto(ph.name,800)}" alt="Photo ${i+1} of ${esc(name)}" loading="lazy">`).join('')}</div>`:''}
+   <div class="body">
+     <h2>${esc(name)}</h2>
+     ${d?.rating?`<div class="meta"><span class="stars">★ ${d.rating.toFixed(1)}</span> ${fmtCount(d.userRatingCount)} Google reviews${d.primaryTypeDisplayName?.text?`, ${esc(d.primaryTypeDisplayName.text)}`:''}</div>`:(r.type?`<div class="meta">${esc(r.type)}</div>`:'')}
+     ${addr?`<div class="addr"><button class="copy" onclick="app.copyText(this.dataset.t,event)" data-t="${esc(addr)}" aria-label="Copy address" title="Copy address">${COPY_ICON}</button><span class="txt">${esc(addr)}</span></div>`:''}
+     ${d?.editorialSummary?.text?`<p class="summary">${esc(d.editorialSummary.text)}</p>`:''}
+     <div class="links">${d?.googleMapsUri?`<a href="${esc(d.googleMapsUri)}" target="_blank" rel="noopener">Open in Google Maps</a>`:''}${d?.websiteUri?`<a href="${esc(d.websiteUri)}" target="_blank" rel="noopener">Website</a>`:''}${d?.nationalPhoneNumber?`<a href="tel:${esc(d.nationalPhoneNumber)}">${esc(d.nationalPhoneNumber)}</a>`:''}</div>
+     ${hours.length?`<details><summary>Opening hours</summary><ul>${hours.map(h=>`<li>${esc(h)}</li>`).join('')}</ul></details>`:''}
+     ${photos.length?`<div class="credit">Photos from Google${authors.length?` by ${esc(authors.slice(0,3).join(', '))}`:''}</div>`:''}
+     ${loading?'<p class="hint">Loading photos and reviews…</p>':''}
+     ${!loading&&r.src==='g'&&!d?'<p class="hint">Could not load Google details right now.</p>':''}
+     ${!loading&&r.src!=='g'?`<p class="hint">${G_OK===false?'Connect Google to see photos and reviews here.':'This place is not linked to Google, so there are no photos or reviews.'}</p>`:''}
+     ${reviews.length?`<h3>Reviews</h3>${reviews.map(v=>`<div class="review"><div class="who"><b>${esc(v.authorAttribution?.displayName||'Google user')}</b><span><span class="stars">★ ${v.rating||''}</span> ${esc(v.relativePublishTimeDescription||'')}</span></div><p>${esc(v.text?.text||v.originalText?.text||'')}</p></div>`).join('')}<div class="credit">Reviews from Google</div>`:''}
+   </div>
+   <div class="addbar">${mine?`<span class="hint" style="flex:1">In your places${mine.name!==name?` as ${esc(mine.name)}`:''}.</span><button class="btn ghost small" data-sheet="show" data-id="${mine.id}">Show in list</button><button class="btn small" data-sheet="fav" data-id="${mine.id}">${mine.fav?'★ Favorited':'☆ Favorite'}</button>${mine.gid&&r.src==='g'?`<button class="btn ghost small" data-sheet="unlink" data-id="${mine.id}">Unlink</button>`:''}`
+     :linkBar(r,loading)+`<select id="sheetCat" aria-label="Category">${Object.entries(CATS).map(([k,c])=>`<option value="${k}"${k===guess?' selected':''}>${c.label}</option>`).join('')}</select><button class="btn" data-sheet="add"${loading?' disabled':''}>Add as a new place</button>`}</div>`;
+}
+function linkBar(r,loading){
+  if(r.src!=='g')return G_OK===false?'<div class="linkhint">Once Google is connected, you can link places you find here to places already in your list.</div>':'';
+  const cand=linkTarget?byId(linkTarget):nearMatch(r);
+  const opts=S.places.filter(p=>p.gid!==r.id).map(p=>({p,d:miles(p,{lat:r.lat??p.lat,lng:r.lng??p.lng})})).sort((a,b)=>a.d-b.d);
+  return (cand?`<div class="linkhint"><span style="flex:1">${linkTarget?'Link this Google place to':'This looks like'} <b>${esc(cand.name)}</b>${linkTarget?'?':' in your list.'}</span><button class="btn small" data-sheet="link" data-id="${cand.id}"${loading?' disabled':''}>Link them</button></div>`:'')
+    +`<select class="linkpick" data-linkpick="1" aria-label="Link to a place in my list"${loading?' disabled':''}><option value="">Link to a place already in my list…</option>${opts.map(({p,d})=>`<option value="${p.id}">${esc(p.name)} (${fmtMi(d)} away${p.gid?', relink':''})</option>`).join('')}</select>`;
+}
+function closeSheetKeepLink(){$('#sheet').hidden=true;sheetCtx=null;searchMarker?.remove();searchMarker=null;}
+function closeSheet(){$('#sheet').hidden=true;sheetCtx=null;linkTarget=null;searchMarker?.remove();searchMarker=null;}
+$('#sheet').onclick=e=>{
+  const b=e.target.closest('[data-sheet]');if(!b)return;const a=b.dataset.sheet;
+  if(a==='close')return closeSheet();
+  if(a==='link')return linkPlace(b.dataset.id);
+  if(a==='unlink'){const p=byId(b.dataset.id);if(p&&confirm(`Unlink ${p.name} from this Google place?`)){delete p.gid;p.gtried=1;save();refresh();closeSheet();toast('Unlinked');}return;}
+  if(a==='show'){const id=b.dataset.id;closeSheet();showTab('places');S.hidden=S.hidden.filter(c=>c!==byId(id).cat);refresh();select(id);document.querySelector(`.place[data-id="${id}"]`)?.scrollIntoView({block:'center'});return;}
+  if(a==='fav'){toggleFav(b.dataset.id);if(sheetCtx){const d=sheetCtx.r.id&&GCACHE[sheetCtx.r.id];renderSheet(d||null);}return;}
+  if(a==='add'){
+    const {r}=sheetCtx,d=r.id&&GCACHE[r.id],cat=$('#sheetCat').value;
+    const np={id:uid(),cat,name:d?.displayName?.text||r.name,lat:d?.location?.latitude??r.lat,lng:d?.location?.longitude??r.lng,address:d?.formattedAddress||r.addr||'',notes:d?.editorialSummary?.text||'',status:'want',photos:[],gid:r.src==='g'?r.id:undefined};
+    S.places.push(np);S.hidden=S.hidden.filter(c=>c!==cat);sheetCtx.mine=np;save();refresh();renderSheet(d||null);searchMarker?.remove();searchMarker=null;
+    toast(`${np.name} added to your places`);
+  }
+};
+$('#sheet').onchange=e=>{const s=e.target.closest('[data-linkpick]');if(s&&s.value)linkPlace(s.value);};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#sheet').hidden&&$('#lightbox').hidden)closeSheet();});
+
+/* Google photos and rating inside each place card (loaded live from Google) */
+function gblockHtml(p){
+  if(G_OK===false)return '';
+  if(p.gid&&GCACHE[p.gid])return gblockFilled(p,GCACHE[p.gid]);
+  if(!p.gid&&p.gtried)return '';
+  return `<div class="gblock" data-pid="${p.id}"></div>`;
+}
+function gblockFilled(p,d){
+  const photos=(d.photos||[]).slice(0,5);
+  if(!photos.length&&!d.rating)return '';
+  return `<div class="gblock">${d.rating?`<div class="grate"><span class="stars">★ ${d.rating.toFixed(1)}</span> (${fmtCount(d.userRatingCount)} on Google)<button data-greviews="${p.id}">Reviews and photos</button></div>`:''}${photos.length?`<div class="gthumbs">${photos.map((ph,i)=>`<img src="${gphoto(ph.name,200)}" alt="Google photo ${i+1} of ${esc(p.name)}" loading="lazy" data-greviews="${p.id}">`).join('')}</div><div class="credit">Photos from Google</div>`:''}</div>`;
+}
+async function linkGoogle(p){
+  const j=await gapi({action:'search',q:p.name,lat:p.lat.toFixed(5),lng:p.lng.toFixed(5),radius:2000});
+  const best=(j.places||[]).map(x=>({x,d:miles(p,{lat:x.location?.latitude,lng:x.location?.longitude})})).filter(o=>o.d<0.6).sort((a,b)=>a.d-b.d)[0];
+  if(best){p.gid=best.x.id;save();}else{p.gtried=1;save();}
+}
+const gQueue=[];let gBusy=false;
+async function gPump(){
+  if(gBusy)return;gBusy=true;
+  while(gQueue.length){
+    const el=gQueue.shift();const p=byId(el.dataset.pid);
+    if(!p||!el.isConnected)continue;
+    try{
+      if(!p.gid&&!p.gtried)await linkGoogle(p);
+      if(p.gid){const d=await gdetails(p.gid);if(el.isConnected)el.outerHTML=gblockFilled(p,d);}else if(el.isConnected)el.remove();
+    }catch(e){if(G_OK===false){document.querySelectorAll('.gblock:empty').forEach(x=>x.remove());gQueue.length=0;break;}}
+  }
+  gBusy=false;
+}
+const gio='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(en=>{if(en.isIntersecting){gio.unobserve(en.target);gQueue.push(en.target);gPump();}}),{rootMargin:'150px'}):null;
+function hydrateG(root){root.querySelectorAll('.gblock[data-pid]:empty').forEach(el=>{if(gio)gio.observe(el);else{gQueue.push(el);gPump();}});}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-greviews]');if(t){e.stopPropagation();openPlaceSheet(t.dataset.greviews);}},true);
+
+/* ---------- places list ---------- */
+let openMenu=null;
+function renderList(){
+  if(document.querySelector('#list [contenteditable="true"]'))return;
+  const q=$('#q').value.trim().toLowerCase(),home=byId(S.homeId),keys=Object.keys(CATS);
+  const items=S.places.filter(p=>visible(p)&&(!q||(p.name+' '+p.notes).toLowerCase().includes(q)))
+    .map(p=>{const r=homeDist(p);return {p,fromHome:r&&r.mi!=null?r.mi:(home?miles(home,p)*1.3:0)};})
+    .sort((a,b)=>a.p.cat===b.p.cat?a.fromHome-b.fromHome:keys.indexOf(a.p.cat)-keys.indexOf(b.p.cat));
+  if(!items.length){$('#list').innerHTML=`<p class="empty">${S.favOnly?'No favorites to show yet. Turn off the Favorites filter above, then tap the icon of any place to favorite it.':'No places to show. Tap a gray icon above to turn that category back on, or add a place in the Add place tab.'}</p>`;return;}
+  $('#list').innerHTML=items.map(({p})=>{
+    const on=onTrip(p.id),tl=tripLabel(p.id);
+    return `<div class="place${p.id===selected?' sel':''}" data-id="${p.id}">
+     <button class="favbtn" data-act="fav" data-id="${p.id}" aria-pressed="${!!p.fav}" aria-label="${p.fav?'Remove '+esc(p.name)+' from favorites':'Favorite '+esc(p.name)}" title="${p.fav?'Favorited. Tap to remove':'Tap to favorite'}">${avf(p)}</button>
+     <div>
+       <h3><span class="editable" data-edit="name" data-id="${p.id}" title="Double-click to rename">${esc(p.name)}</span>${p.cat!=='anchor'&&p.status!=='want'?`<span class="tag">${p.status==='booked'?'Booked':'Maybe'}</span>`:''}${p.id===S.homeId?'<span class="tag">Home base</span>':''}</h3>
+       ${addrHtml(p,true)}
+       <div class="stn">${esc(homeText(p))}</div>
+       ${on?`<div class="ontrip">On ${esc(tl)}</div>`:''}
+       <div class="note editable${p.notes?'':' empty-bio'}" data-edit="notes" data-id="${p.id}" title="Double-click to edit the bio">${p.notes?esc(p.notes):'Double-click to add a short bio'}</div>
+       <div class="thumbs">${p.photos.map((pid,i)=>`<img data-photo="${pid}" data-lb="${p.id}" data-i="${i}" alt="Photo ${i+1} of ${esc(p.name)}">`).join('')}<button class="addphoto" data-act="photo" data-id="${p.id}" aria-label="Add a photo of ${esc(p.name)}" title="Choose a photo, or paste or drop one onto this place">+ Photo</button></div>
+       ${gblockHtml(p)}
+     </div>
+     <div class="acts">
+       <button class="rbtn${on?' on':''}" data-act="dir" data-id="${p.id}" aria-label="Directions to ${esc(p.name)}" title="Directions"><svg viewBox="0 0 24 24"><path d="M12 2.5l9.5 9.5-9.5 9.5L2.5 12z"/><path d="M9 13.5v-2.5h6M13 8.8L15.2 11 13 13.2"/></svg></button>
+       <button class="rbtn ghost" data-act="menu" data-id="${p.id}" aria-expanded="${openMenu===p.id}" aria-label="More for ${esc(p.name)}">•••</button>
+       ${openMenu===p.id?`<div class="menu" role="menu">
+         <button data-act="editloc" data-id="${p.id}" role="menuitem">Change location or category</button>
+         <button data-act="glink" data-id="${p.id}" role="menuitem">${p.gid?'Relink to a Google place':'Find on Google and link'}</button>
+         <button data-act="home" data-id="${p.id}" role="menuitem">Set as home base</button>
+         ${on?`<button data-act="untrip" data-id="${p.id}" role="menuitem">Remove from all days</button>`:''}
+         <button data-act="delete" data-id="${p.id}" class="danger" role="menuitem">Delete place</button></div>`:''}
+     </div></div>`;}).join('');
+  hydrate($('#list'));hydrateG($('#list'));
+}
+
+/* inline editing: double-click name or bio */
+function startEdit(el){
+  if(el.isContentEditable)return;
+  const p=byId(el.dataset.id);if(!p)return;
+  const field=el.dataset.edit;
+  el.classList.remove('empty-bio');
+  el.classList.remove('none');
+  el.textContent=field==='name'?p.name:(p[field]||'');
+  el.contentEditable='true';el.focus();
+  const r=document.createRange();r.selectNodeContents(el);const s=getSelection();s.removeAllRanges();s.addRange(r);
+}
+function finishEdit(el,cancel){
+  if(!el.isContentEditable)return;
+  el.contentEditable='false';
+  const p=byId(el.dataset.id),field=el.dataset.edit;
+  if(p&&!cancel){
+    const val=el.innerText.split(String.fromCharCode(160)).join(' ').trim();
+    if(field==='name'&&!val)toast("A place needs a name");
+    else if(val!==(p[field]||'')){p[field]=val;save();toast(field==='name'?'Name saved':field==='address'?'Address saved':'Bio saved');}
+  }
+  refresh();
+}
+$('#list').addEventListener('dblclick',e=>{const el=e.target.closest('[data-edit]');if(el){e.preventDefault();startEdit(el);}});
+$('#list').addEventListener('keydown',e=>{
+  const el=e.target.closest('[contenteditable="true"]');if(!el)return;
+  if(e.key==='Enter'&&!(e.shiftKey&&el.dataset.edit==='notes')){e.preventDefault();el.blur();}
+  if(e.key==='Escape'){e.preventDefault();el.dataset.cancel='1';el.blur();}
+});
+$('#list').addEventListener('focusout',e=>{const el=e.target.closest('[contenteditable="true"]');if(el){const c=el.dataset.cancel==='1';delete el.dataset.cancel;finishEdit(el,c);}});
+$('#list').addEventListener('paste',e=>{const el=e.target.closest('[contenteditable="true"]');if(!el||clipImages(e.clipboardData).length)return;e.preventDefault();document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text/plain'));});
+
+$('#list').onclick=e=>{
+  if(e.target.closest('[contenteditable="true"]'))return;
+  const img=e.target.closest('img[data-lb]');if(img)return app.lightbox(img.dataset.lb,+img.dataset.i);
+  const b=e.target.closest('[data-act]');
+  if(!b){const h=e.target.closest('.place h3');if(h&&e.detail===1)select(h.closest('.place').dataset.id);if(openMenu){openMenu=null;renderList();}return;}
+  const id=b.dataset.id,act=b.dataset.act,p=byId(id);
+  if(act!=='menu')openMenu=null;
+  if(act==='fav'){toggleFav(id);return;}
+  if(act==='dir'){app.directions(id);return;}
+  if(act==='photo')return app.addPhoto(id);
+  if(act==='menu'){openMenu=openMenu===id?null:id;renderList();return;}
+  if(act==='editloc')return app.edit(id);
+  if(act==='glink'){if(G_OK===false){toast('Connect Google first. See the setup steps.');return;}linkTarget=id;closeSheetKeepLink();$('#gq').value=p.name;map.setView([p.lat,p.lng],16);doSearch();return;}
+  if(act==='home'){S.homeId=id;save();refresh();toast('Home base updated');return;}
+  if(act==='untrip'){detach(id);save();refresh();toast('Removed from all days');return;}
+  if(act==='delete'){if(confirm(`Delete ${p.name}? Its photos will be deleted too.`)){S.places=S.places.filter(x=>x.id!==id);detach(id);if(S.homeId===id)S.homeId=null;(p.photos||[]).forEach(pid=>idb.del(pid).catch(()=>{}));save();refresh();toast('Place deleted');}else renderList();return;}
+};
+document.addEventListener('click',e=>{if(openMenu&&!e.target.closest('.acts')){openMenu=null;renderList();}});
+
+/* ---------- photos ---------- */
+async function addPhotos(id,files){
+  const p=byId(id);if(!p||!files.length)return;
+  let added=0;
+  for(const f of files){
+    try{const blob=await shrink(f);if(!blob)throw 0;const pid='ph_'+uid()+uid();await idb.set(pid,blob);p.photos.push(pid);added++;}
+    catch(err){toast("One photo couldn't be read. Try a JPG or PNG.");}
+  }
+  if(added){save();refresh();if(popupPlaceId===id)markers[id]?.openPopup();toast(`${added===1?'Photo':added+' photos'} added to ${p.name}`);}
+}
+$('#photoInput').onchange=e=>{const files=[...e.target.files];e.target.value='';addPhotos(photoTarget,files);};
+/* paste and drag-and-drop */
+const clipImages=dt=>[...(dt?.items||[])].filter(i=>i.kind==='file'&&i.type.startsWith('image/')).map(i=>i.getAsFile()).filter(Boolean);
+let hoverPlace=null,popupPlaceId=null;
+$('#list').addEventListener('mouseover',e=>{hoverPlace=e.target.closest('.place')?.dataset.id||null;});
+$('#list').addEventListener('mouseleave',()=>{hoverPlace=null;});
+document.addEventListener('paste',e=>{
+  const files=clipImages(e.clipboardData);if(!files.length)return;
+  e.preventDefault();
+  const onAdd=!$('#tab-add').hidden&&$('#editId').value;
+  const id=hoverPlace||document.activeElement?.closest?.('.place')?.dataset.id||popupPlaceId||(onAdd?$('#editId').value:null)||selected;
+  if(!id){toast('Click a place first, then paste the photo.');return;}
+  addPhotos(id,files);
+});
+$('#list').addEventListener('dragover',e=>{const row=e.target.closest('.place');if(!row||![...e.dataTransfer.types].includes('Files'))return;e.preventDefault();document.querySelectorAll('.place.drop').forEach(x=>x!==row&&x.classList.remove('drop'));row.classList.add('drop');});
+$('#list').addEventListener('dragleave',e=>{const row=e.target.closest('.place');if(row&&!row.contains(e.relatedTarget))row.classList.remove('drop');});
+$('#list').addEventListener('drop',e=>{const row=e.target.closest('.place');if(!row)return;e.preventDefault();row.classList.remove('drop');
+  const files=[...e.dataTransfer.files].filter(f=>f.type.startsWith('image/'));
+  if(files.length)addPhotos(row.dataset.id,files);else toast('Drop an image file, or copy the image and paste it.');});
+let lb={id:null,i:0};
+async function showLightbox(){
+  const p=byId(lb.id);if(!p||!p.photos.length){closeLightbox();return;}
+  lb.i=Math.max(0,Math.min(lb.i,p.photos.length-1));
+  const u=await photoURL(p.photos[lb.i]);
+  $('#lbImg').src=u||'';$('#lbImg').alt=`Photo of ${p.name}`;
+  $('#lbCap').innerHTML=`${esc(p.name)}<small>Photo ${lb.i+1} of ${p.photos.length}</small>`;
+  $('#lbPrev').hidden=$('#lbNext').hidden=p.photos.length<2;
+  $('#lightbox').hidden=false;$('#lbClose').focus();
+}
+function closeLightbox(){$('#lightbox').hidden=true;}
+$('#lbClose').onclick=closeLightbox;
+$('#lbPrev').onclick=()=>{const p=byId(lb.id);lb.i=(lb.i-1+p.photos.length)%p.photos.length;showLightbox();};
+$('#lbNext').onclick=()=>{const p=byId(lb.id);lb.i=(lb.i+1)%p.photos.length;showLightbox();};
+$('#lbDel').onclick=async()=>{
+  const p=byId(lb.id);if(!p||!confirm('Delete this photo?'))return;
+  const [pid]=p.photos.splice(lb.i,1);
+  try{await idb.del(pid);}catch(e){}
+  if(purl[pid]){URL.revokeObjectURL(purl[pid]);delete purl[pid];}
+  save();refresh();toast('Photo deleted');
+  if(p.photos.length)showLightbox();else closeLightbox();
+};
+$('#lightbox').onclick=e=>{if(e.target.id==='lightbox')closeLightbox();};
+document.addEventListener('keydown',e=>{if($('#lightbox').hidden)return;if(e.key==='Escape')closeLightbox();if(e.key==='ArrowLeft')$('#lbPrev').click();if(e.key==='ArrowRight')$('#lbNext').click();});
+
+/* ---------- grouping: favorites within a 20-minute walk ---------- */
+function toggleFav(id){const p=byId(id);if(!p)return;p.fav=!p.fav;save();refresh();toast(p.fav?`${p.name} favorited`:`${p.name} removed from favorites`);}
+const WALK_GROUP_MIN=20;
+function favGroups(){
+  const favs=S.places.filter(p=>p.fav);
+  const par=favs.map((_,i)=>i),find=i=>par[i]===i?i:(par[i]=find(par[i]));
+  const link={};let pending=false;
+  for(let i=0;i<favs.length;i++)for(let j=i+1;j<favs.length;j++){
+    const a=favs[i],b=favs[j],d=miles(a,b);
+    if(d>1.3)continue;
+    const r=street('foot',a,b);
+    let m=null;
+    if(!r){pending=true;continue;}
+    m=r.fail?walkMin(d):r.min;
+    if(m<=WALK_GROUP_MIN){par[find(i)]=find(j);(link[a.id]??=[]).push({p:b,m});(link[b.id]??=[]).push({p:a,m});}
+  }
+  const map_={};favs.forEach((p,i)=>{(map_[find(i)]??=[]).push(p);});
+  const groups=Object.values(map_);
+  return {groups:groups.filter(g=>g.length>1).sort((a,b)=>b.length-a.length),singles:groups.filter(g=>g.length===1).map(g=>g[0]),link,pending};
+}
+function groupName(g){
+  const c={lat:g.reduce((s,p)=>s+p.lat,0)/g.length,lng:g.reduce((s,p)=>s+p.lng,0)/g.length};
+  return 'Around '+nearestStation(c).s.name.split(' (')[0];
+}
+function grow(p,link){
+  const near=(link[p.id]||[]).sort((a,b)=>a.m-b.m)[0];
+  return `<div class="grow">${avf(p,30)}<div><h4>${esc(p.name)}</h4><div class="sub">${near?`${fmtMin(near.m)} walk to ${esc(near.p.name)}`:esc(homeText(p))}</div></div>
+    <button class="rbtn" data-gdir="${p.id}" aria-label="Directions to ${esc(p.name)}" title="Directions"><svg viewBox="0 0 24 24"><path d="M12 2.5l9.5 9.5-9.5 9.5L2.5 12z"/><path d="M9 13.5v-2.5h6M13 8.8L15.2 11 13 13.2"/></svg></button></div>`;
+}
+let lastGroups=[];
+function renderGroups(){
+  const favs=S.places.filter(p=>p.fav);
+  if(!favs.length){$('#groups').innerHTML=`<p class="empty">No favorites yet. In the Places tab, tap a place's icon to favorite it. It gets a gold ring, and favorites that are within a 20-minute walk of each other show up here as groups.</p>`;return;}
+  const {groups,singles,link,pending}=favGroups();lastGroups=groups;
+  let html='';
+  if(pending)html+='<p class="hint" style="margin:0 0 10px">Measuring walking times between favorites…</p>';
+  html+=groups.map((g,gi)=>`<div class="grp"><h2>${esc(groupName(g))}</h2><div class="gsub">${g.length} favorites, each within a 20-minute walk of another</div>${g.map(p=>grow(p,link)).join('')}<div class="row2"><button class="btn small" data-gplan="${gi}">Plan directions for this group</button></div></div>`).join('');
+  if(singles.length)html+=`<div class="grp"><h2>On their own</h2><div class="gsub">More than a 20-minute walk from your other favorites</div>${singles.map(p=>grow(p,link)).join('')}</div>`;
+  $('#groups').innerHTML=html;
+}
+function orderFromHome(ps){
+  const h=byId(S.homeId);let cur=h||ps[0];const left=[...ps],out=[];
+  while(left.length){left.sort((a,b)=>miles(cur,a)-miles(cur,b));cur=left.shift();out.push(cur);}
+  return out;
+}
+function planGroup(g){
+  const name=groupName(g);
+  let d=S.days.find(x=>x.name===name);
+  if(!d){d={id:uid(),name,stops:[],modes:{},loop:true};S.days.push(d);}
+  orderFromHome(g).forEach(p=>{if(!d.stops.includes(p.id))d.stops.push(p.id);});
+  save();viewDay(S.days.indexOf(d));toast(`Directions ready for ${name}`);
+}
+$('#groups').onclick=e=>{
+  const p=e.target.closest('[data-gplan]');if(p)return planGroup(lastGroups[+p.dataset.gplan]);
+  const d=e.target.closest('[data-gdir]');if(d)return app.directions(d.dataset.gdir);
+};
+function newDay(){const d={id:uid(),name:'Day '+(S.days.length+1),stops:[],modes:{},loop:true};S.days.push(d);return d;}
+function detach(id){S.queue=S.queue.filter(x=>x!==id);S.days.forEach(d=>d.stops=d.stops.filter(x=>x!==id));}
+function requeue(id){}
+function addToDay(id,val){
+  if(!val)return;
+  const d=val==='new'?newDay():S.days.find(x=>x.id===val);if(!d)return;
+  d.stops.push(id);
+  save();refresh();toast(`${byId(id)?.name||'Place'} added to ${d.name}`);
+}
+function viewDay(i){S.activeDay=i;save();refresh();showTab('route');const pts=routeStops().map(x=>[x.p.lat,x.p.lng]);if(pts.length>1)map.fitBounds(pts,{padding:[50,50]});else if(pts.length)map.setView(pts[0],15);}
+
+/* ---------- directions ---------- */
+const legCache={};
+function addSel(ins,n){
+  const H=S.homeId;
+  const grp=(label,ps)=>ps.length?`<optgroup label="${label}">${ps.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</optgroup>`:'';
+  const q=grp('Favorites',S.places.filter(p=>p.fav&&p.id!==H));
+  const cats=Object.entries(CATS).map(([k,c])=>grp(c.label,S.places.filter(p=>p.cat===k&&p.id!==H))).join('');
+  return `<li class="addstop"><select data-addat="${ins}" aria-label="Add a stop${n?` to trip ${n}`:''}"><option value="">+ Add a stop${n?` to Trip ${n}`:''}…</option>${q}${cats}</select></li>`;
+}
+function normalizeDay(d){
+  const H=S.homeId;if(!H)return;
+  const out=[];for(const id of d.stops){if(id===H&&out[out.length-1]===H)continue;out.push(id);}
+  if(d.loop)while(out[0]===H)out.shift();
+  d.stops=out;
+}
+function renderDays(){
+  $('#days').innerHTML=S.days.map((d,i)=>`<button data-day="${i}" aria-pressed="${i===S.activeDay}">${esc(d.name)} <small>${d.stops.length}</small></button>`).join('')+
+   `<button data-day="new" aria-label="Add a day">+ Day</button>`+(S.days.length>1?`<button data-day="del">Delete day</button>`:'');
+  $('#startHome').checked=!!day().loop;
+}
+function renderRoute(){
+  renderDays();
+  const stops=routeStops(),d=day();
+  if(!d.stops.length){
+    $('#route').innerHTML=`<p class="empty">${esc(d.name)} has no stops yet. Tap the directions button on any place, or use Plan directions in the Grouping tab.</p><ul class="strip" style="list-style:none;padding:0">${addSel(0,0)}</ul>`;
+    routeLayer.clearLayers();return;
+  }
+  let totMi=0,totMin=0,html='',anyPending=false;const legs=[];
+  const H=S.homeId,hasBreaks=d.stops.includes(H);
+  let trip=0,num=0;
+  const header=()=>{trip++;return hasBreaks?`<li class="triphead">Trip ${trip}</li>`:'';};
+  if(stops.length&&stops[0].p.id!==H)html+=header();
+  for(let i=0;i<stops.length;i++){
+    const {p,idx}=stops[i],isHome=p.id===H,isEnd=idx<0,isFinal=i===stops.length-1;
+    const sub=isHome?(i===0?'Start at home base':isFinal&&isEnd?'Back to home base':'Home break'):esc(CATS[p.cat]?.label||'');
+    const n=isHome?'':`<span class="num">${++num}</span>`;
+    html+=`<li class="stop">${av(p.cat,34)}${n}
+      <div><h4>${esc(p.name)}</h4>${addrHtml(p,false)}<div class="sub">${sub}</div></div>
+      ${isEnd?'<span></span>':`<div class="ctl"><button data-mv="-1" data-i="${idx}" aria-label="Move up">↑</button><button data-mv="1" data-i="${idx}" aria-label="Move down">↓</button>${!isHome&&H?`<button data-homeafter="${idx}" aria-label="Go home for a break after this stop" title="Go home for a break after this stop">⌂</button>`:''}<button data-rm="${idx}" aria-label="Remove from ${esc(d.name)}">✕</button></div>`}</li>`;
+    if(isHome&&!isFinal)html+=header();
+    if(isFinal){
+      if(isHome&&!isEnd){html+=header()+addSel(d.stops.length,hasBreaks?trip:0);}
+      else if(!isHome)html+=addSel(d.stops.length,hasBreaks?trip:0);
+    }
+    if(i<stops.length-1){
+      const nx=stops[i+1];
+      if(!isHome&&nx.p.id===H)html+=addSel(nx.idx>=0?nx.idx:d.stops.length,hasBreaks?trip:0);
+      const b=nx.p,key=p.id+'>'+b.id,mode=d.modes[key]||'auto',plan=legPlan(p,b,mode);
+      legs.push(plan);totMi+=plan.mi;totMin+=plan.min;if(plan.pending)anyPending=true;
+      const stepTxt=s=>s.pending?`${esc(s.txt)}, calculating…`:s.fail?`${esc(s.txt)}, street route unavailable`:`${esc(s.txt)}, ${s.nomi?'':(s.rail?'about ':'')+fmtMi(s.mi)+', '}${fmtMin(s.min)}`;
+      html+=`<li class="leg"><div class="row">
+         <select data-leg="${key}" aria-label="How to get there">${['auto','walk','train','bus','highway'].map(m=>`<option value="${m}"${m===mode?' selected':''}>${{auto:'Best guess',walk:'Walk',train:'Train',bus:'City bus',highway:'Highway bus'}[m]}</option>`).join('')}</select>
+         ${plan.pending?'<span>Calculating street route…</span>':`<span class="num2">${fmtMin(plan.min)}</span><span>${fmtMi(plan.mi)}</span>`}
+         <a href="${gmaps(p,b,plan.mode)}" target="_blank" rel="noopener">Exact times</a></div>
+         <ul>${plan.steps.map(s=>`<li><i>${s.t}</i><span>${stepTxt(s)}</span></li>`).join('')}</ul></li>`;
+    }
+  }
+  const all=`https://www.google.com/maps/dir/${stops.map(({p})=>p.lat+','+p.lng).join('/')}`;
+  $('#route').innerHTML=`<div class="totals"><div><b>${anyPending?'…':fmtMin(totMin)}</b>travel time</div><div><b>${anyPending?'…':fmtMi(totMi)}</b>distance</div><div><b>${d.stops.length}</b>stops</div></div>
+    <ol class="strip">${html}</ol>
+    ${S.homeId&&d.stops[d.stops.length-1]!==S.homeId?'<button class="addhome" data-homeend="1">⌂ Go home, then start a new trip</button>':''}
+    <div class="row2" style="margin-top:14px"><a class="btn ghost small" href="${all}" target="_blank" rel="noopener">Open all stops in Google Maps</a></div>
+    <p class="est">Tap ⌂ on a stop to go home for a break after it. Everything after a break is a new trip from home. Use ↑ ↓ to move a stop into the trip before or after a break. Walking distances follow streets and sidewalks, and bus and taxi distances follow roads. Train rides are estimated between stations. Tap Exact times on any leg for live train and bus schedules.</p>`;
+  drawRoute(legs);
+}
+let drawToken=0;
+function drawRoute(legs){
+  const tok=++drawToken;routeLayer.clearLayers();
+  const W={color:'#1C2230',weight:4,dashArray:'1 8',lineCap:'round'};
+  for(const plan of legs)for(const s of plan.steps){
+    if(s.rail){const sa=plan.sa,sb=plan.sb;L.polyline([[sa.lat,sa.lng],[sb.lat,sb.lng]],{color:'#1F3A93',weight:7,opacity:.9,lineCap:'round'}).addTo(routeLayer);continue;}
+    if(!s.prof)continue;
+    street(s.prof,s.a,s.b,true);
+    const g=geo(s.prof,s.a,s.b);if(!g)continue;
+    L.polyline(g,s.t==='Walk'?W:{color:'#E60012',weight:5,dashArray:'10 8',opacity:.85}).addTo(routeLayer);
+  }
+}
+$('#days').onclick=e=>{const b=e.target.closest('button');if(!b)return;const v=b.dataset.day;
+  if(v==='new'){newDay();S.activeDay=S.days.length-1;}
+  else if(v==='del'){if(confirm(`Delete ${day().name}? Places that aren't on another day go back to Needs a day.`)){const gone=S.days.splice(S.activeDay,1)[0];gone.stops.forEach(requeue);S.activeDay=0;}}
+  else return viewDay(+v);
+  save();refresh();};
+$('#startHome').onchange=e=>{day().loop=e.target.checked;save();refresh();};
+$('#renameDay').onclick=()=>{const n=prompt('Name this day (e.g. "Oct 12 Asakusa")',day().name);if(n&&n.trim()){day().name=n.trim();save();refresh();}};
+$('#clearDay').onclick=()=>{if(confirm(`Remove all stops from ${day().name}? Places that aren't on another day go back to Needs a day.`)){const old=day().stops;day().stops=[];old.forEach(requeue);save();refresh();}};
+$('#route').onclick=e=>{const d=day();
+  const mv=e.target.closest('[data-mv]');if(mv){const i=+mv.dataset.i,j=i+ +mv.dataset.mv;if(j>=0&&j<d.stops.length){[d.stops[i],d.stops[j]]=[d.stops[j],d.stops[i]];save();refresh();}return;}
+  const ha=e.target.closest('[data-homeafter]');if(ha){d.stops.splice(+ha.dataset.homeafter+1,0,S.homeId);save();refresh();toast('Home break added');return;}
+  const he=e.target.closest('[data-homeend]');if(he){d.stops.push(S.homeId);save();refresh();toast('New trip started. Add stops to it below.');return;}
+  const rm=e.target.closest('[data-rm]');if(rm){const [id]=d.stops.splice(+rm.dataset.rm,1);requeue(id);save();refresh();toast(id===S.homeId?'Home break removed':`Removed from ${d.name}`);}};
+$('#route').onchange=e=>{
+  const a=e.target.closest('[data-addat]');
+  if(a){if(!a.value)return;const d=day(),id=a.value;d.stops.splice(+a.dataset.addat,0,id);save();refresh();toast(`${byId(id).name} added`);return;}
+  const s=e.target.closest('[data-leg]');if(!s)return;day().modes[s.dataset.leg]=s.value;save();renderRoute();};
+
+/* ---------- add / edit form ---------- */
+$('#fCat').innerHTML=Object.entries(CATS).map(([k,c])=>`<option value="${k}">${c.label}</option>`).join('');
+let draft=null,draftMarker=null,picking=false;
+let draftTok=0;
+function setDraft(lat,lng,label,keepAddr,addr){
+  draft={lat:+lat,lng:+lng};draftMarker?.remove();
+  if(addr)$('#fAddr').value=addr;
+  else if(!keepAddr){const t=++draftTok;$('#fAddr').value='';$('#fAddr').placeholder='Looking up address…';reverseAddr(lat,lng).then(a=>{if(t===draftTok&&!$('#fAddr').value)$('#fAddr').value=a;}).catch(()=>{}).finally(()=>{$('#fAddr').placeholder='Filled in automatically. You can paste the exact address.';});}
+  draftMarker=L.marker([lat,lng],{icon:L.divIcon({className:'',html:`<div class="pin">${av($('#fCat').value,32)}</div>`,iconSize:[32,32],iconAnchor:[16,16]})}).addTo(map);
+  map.flyTo([lat,lng],15,{duration:.5});
+  $('#coords').textContent=`${label||'Location set'}.`;
+}
+$('#geoGo').onclick=async()=>{
+  const q=$('#geoQ').value.trim();if(!q)return;
+  $('#geoRes').innerHTML='<p class="hint">Searching…</p>';
+  try{const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=jp&accept-language=en&q=${encodeURIComponent(q)}`);const j=await r.json();
+    $('#geoRes').innerHTML=j.length?j.map(x=>`<button type="button" data-lat="${x.lat}" data-lng="${x.lon}" data-name="${esc(x.name||x.display_name.split(',')[0])}" data-addr="${esc(x.display_name)}">${esc(x.display_name)}</button>`).join(''):'<p class="hint">Nothing found. Try the English or Japanese name, or tap the map to drop a pin.</p>';
+  }catch(e){$('#geoRes').innerHTML='<p class="hint">Search is unavailable right now. Tap the map to drop a pin instead.</p>';}
+};
+$('#geoQ').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#geoGo').click();}});
+$('#geoRes').onclick=e=>{const b=e.target.closest('button');if(!b)return;setDraft(b.dataset.lat,b.dataset.lng,'',false,b.dataset.addr);if(!$('#fName').value)$('#fName').value=b.dataset.name;$('#geoRes').innerHTML='';};
+function stopPicking(){picking=false;$('#pickingMsg').hidden=true;$('#pickBtn').textContent='Or tap the map to drop a pin';}
+$('#pickBtn').onclick=()=>{if(picking)return stopPicking();picking=true;$('#pickingMsg').hidden=false;$('#pickBtn').textContent='Cancel pin drop';};
+map.on('click',e=>{if(!picking)return;stopPicking();setDraft(e.latlng.lat,e.latlng.lng,'Pin dropped');});
+$('#fCat').onchange=()=>{if(draft)setDraft(draft.lat,draft.lng,'',true);};
+$('#addForm').onsubmit=e=>{
+  e.preventDefault();
+  if(!draft){$('#coords').textContent='Set a location first: search above or drop a pin on the map.';return;}
+  const id=$('#editId').value;
+  const data={name:$('#fName').value.trim(),cat:$('#fCat').value,status:$('#fStatus').value,notes:$('#fNotes').value.trim(),address:$('#fAddr').value.trim(),lat:draft.lat,lng:draft.lng};
+  if(!data.name)return;
+  if(id)Object.assign(byId(id),data);else S.places.push({id:uid(),photos:[],...data});
+  S.hidden=S.hidden.filter(c=>c!==data.cat);
+  resetForm();save();refresh();showTab('places');toast(id?'Changes saved':'Place saved');fillAddresses();
+};
+function resetForm(){$('#addForm').reset();$('#editId').value='';draft=null;draftMarker?.remove();draftMarker=null;$('#coords').textContent='No location set yet.';$('#saveBtn').textContent='Save place';$('#cancelEdit').hidden=true;}
+$('#cancelEdit').onclick=resetForm;
+
+/* ---------- actions ---------- */
+window.app={
+  fav(id){toggleFav(id);map.closePopup();},
+  directions(id){
+    const d=day(),p=byId(id);if(!p)return;map.closePopup();closeSheet();
+    if(id!==S.homeId&&!d.stops.includes(id)){d.stops.push(id);save();toast(`${p.name} added to ${d.name}`);}
+    viewDay(S.activeDay);
+  },
+  addPhoto(id){photoTarget=id;$('#photoInput').click();},
+  addToDay(id,v){map.closePopup();addToDay(id,v);},
+  sheet(id){openPlaceSheet(id);},
+  async copyText(t,e){e?.stopPropagation();toast(await copyText(t)?'Address copied. Paste it into Google Maps.':'Could not copy. Select the address and copy it.');},
+  async copyAddr(id,e){e?.stopPropagation();const p=byId(id);if(!p||!p.address)return;toast(await copyText(p.address)?'Address copied. Paste it into Google Maps.':'Could not copy. Select the address and copy it.');},
+  lightbox(id,i){lb={id,i};showLightbox();},
+  edit(id){const p=byId(id);openMenu=null;showTab('add');$('#editId').value=id;$('#fName').value=p.name;$('#fCat').value=p.cat;$('#fStatus').value=p.status||'want';$('#fNotes').value=p.notes||'';$('#fAddr').value=p.address||'';setDraft(p.lat,p.lng,'Current location',true);$('#saveBtn').textContent='Save changes';$('#cancelEdit').hidden=false;map.closePopup();}
+};
+$('#q').oninput=renderList;
+$('#tglStations').onclick=e=>{const on=map.hasLayer(stationLayer);on?map.removeLayer(stationLayer):map.addLayer(stationLayer);e.currentTarget.setAttribute('aria-pressed',!on);};
+$('#fitAll').onclick=()=>{const pts=S.places.filter(visible).map(p=>[p.lat,p.lng]);if(pts.length)map.fitBounds(pts,{padding:[40,40]});};
+$('#fitRoute').onclick=()=>{const pts=routeStops().map(({p})=>[p.lat,p.lng]);if(pts.length>1)map.fitBounds(pts,{padding:[50,50]});else if(pts.length)map.setView(pts[0],15);showTab('route');};
+
+/* ---------- backup (with photos) ---------- */
+const toDataURL=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b);});
+$('#exportBtn').onclick=async()=>{
+  toast('Preparing backup…');
+  const photoData={};
+  for(const p of S.places)for(const pid of p.photos||[]){try{const b=await idb.get(pid);if(b)photoData[pid]=await toDataURL(b);}catch(e){}}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({...S,photoData})],{type:'application/json'}));a.download='tokyo-planner-backup.json';a.click();
+  toast('Backup downloaded');
+};
+$('#importFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{const j=JSON.parse(await f.text());if(!Array.isArray(j.places))throw 0;
+    const pd=j.photoData||{};delete j.photoData;
+    for(const [pid,du] of Object.entries(pd)){try{await idb.set(pid,await (await fetch(du)).blob());}catch(err){}}
+    S=migrate(j);S.activeDay=0;save();refresh();toast('Backup imported');
+  }catch(err){alert('That file is not a Tokyo Planner backup.');}};
+$('#resetBtn').onclick=()=>{if(confirm('Replace everything with the starter list? Export a backup first if you want to keep your changes.')){S=seedState();save();refresh();}};
+
+function showTab(t){document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));document.querySelectorAll('.tabpane').forEach(p=>p.hidden=p.id!=='tab-'+t);}
+document.querySelector('nav.tabs').onclick=e=>{const b=e.target.closest('button');if(b)showTab(b.dataset.tab);};
+function renderHome(){const h=byId(S.homeId);$('#homePill').innerHTML=h?`Home base<b>${esc(h.name)}</b>`:'No home base set';}
+function refresh(){S.days.forEach(normalizeDay);renderHome();renderChips();renderList();renderGroups();renderMarkers();renderRoute();}
+/* panel resize (desktop) and collapse (mobile) */
+(function(){
+  try{const w=+localStorage.getItem('tokyo-planner-pw');if(w)document.body.style.setProperty('--pw',w+'px');}catch(e){}
+  const rz=$('#resizer');let startX=0,startW=0;
+  const move=e=>{const w=Math.max(320,Math.min(window.innerWidth*0.7,startW+e.clientX-startX));document.body.style.setProperty('--pw',w+'px');map.invalidateSize();};
+  const up=e=>{rz.classList.remove('drag');window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);try{localStorage.setItem('tokyo-planner-pw',parseInt(getComputedStyle(document.body).getPropertyValue('--pw')))}catch(err){}map.invalidateSize();};
+  rz.addEventListener('pointerdown',e=>{e.preventDefault();startX=e.clientX;startW=$('#panel').getBoundingClientRect().width;rz.classList.add('drag');window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);});
+  rz.addEventListener('keydown',e=>{if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;const w=$('#panel').getBoundingClientRect().width+(e.key==='ArrowRight'?20:-20);document.body.style.setProperty('--pw',Math.max(320,Math.min(window.innerWidth*0.7,w))+'px');map.invalidateSize();});
+  $('#collapseBtn').onclick=()=>{const c=document.body.classList.toggle('collapsed');$('#collapseBtn').setAttribute('aria-expanded',!c);$('#collapseBtn').setAttribute('aria-label',c?'Show the panel':'Collapse the panel');setTimeout(()=>map.invalidateSize(),60);};
+})();
+save();refresh();fillAddresses();
+</script>
+</body>
+</html>
