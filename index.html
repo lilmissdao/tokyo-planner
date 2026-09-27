@@ -977,7 +977,7 @@ async function fillAddresses(){
 }
 function addrHtml(p,editable){
   const has=!!p.address;
-  const txt=has?esc(p.address):(ADDR_TRIED[p.id]?'No address found. Double-click to add one.':'Looking up address…');
+  const txt=has?esc(p.address):(ADDR_TRIED[p.id]?(TOUCH()?'No address found. Add one from the ••• menu.':'No address found. Double-click to add one.'):'Looking up address…');
   return `<div class="addr">${has?`<button class="copy" data-copy="${p.id}" onclick="app.copyAddr('${p.id}',event)" aria-label="Copy address of ${esc(p.name)}" title="Copy address">${COPY_ICON}</button>`:''}<span class="txt${has?'':' none'}${editable?' editable':''}"${editable?` data-edit="address" data-id="${p.id}" title="Double-click to edit the address"`:''}>${txt}</span></div>`;
 }
 async function copyText(t){
@@ -1707,8 +1707,8 @@ function renderList(){
        <div class="stn">${esc(homeText(p))}</div>
        ${LODGE(p)?hotelHtml(p):''}
        ${on?`<div class="ontrip">On ${esc(tl)}</div>`:''}
-       <div class="note editable${p.notes?'':' empty-bio'}" data-edit="notes" data-id="${p.id}" title="Double-click to edit the bio">${p.notes?esc(p.notes):'Double-click to add a short bio'}</div>
-       <div class="thumbs">${p.photos.map((pid,i)=>`<img data-photo="${pid}" data-lb="${p.id}" data-i="${i}" alt="Photo ${i+1} of ${esc(p.name)}">`).join('')}<button class="addphoto" data-act="photo" data-id="${p.id}" aria-label="Add a photo of ${esc(p.name)}" title="Choose a photo, or paste or drop one onto this place">+ Photo</button></div>
+       <div class="note editable${p.notes?'':' empty-bio'}" data-edit="notes" data-id="${p.id}" title="Double-click to edit the bio">${p.notes?esc(p.notes):TOUCH()?'Tap to add a short bio':'Double-click to add a short bio'}</div>
+       ${p.photos.length?`<div class="thumbs">${p.photos.map((pid,i)=>`<img data-photo="${pid}" data-lb="${p.id}" data-i="${i}" alt="Photo ${i+1} of ${esc(p.name)}">`).join('')}</div>`:''}
        ${gblockHtml(p)}
      </div>
      <div class="acts">
@@ -1718,6 +1718,8 @@ function renderList(){
          <label class="msel">Add to a day<select data-msel="day" data-id="${p.id}"><option value="">Choose…</option>${S.days.map(d=>`<option value="${d.id}">${esc(d.name)}${d.stops.includes(p.id)?' (on it)':''}</option>`).join('')}<option value="new">+ New day</option></select></label>
          <label class="msel">Category<select data-msel="cat" data-id="${p.id}">${Object.entries(CATS).map(([k,c])=>`<option value="${k}"${k===p.cat?' selected':''}>${esc(c.label)}</option>`).join('')}</select></label>
          <label class="msel">Status<select data-msel="status" data-id="${p.id}">${[['want','Want to go'],['maybe','Maybe'],['booked','Booked']].map(([k,l])=>`<option value="${k}"${k===(p.status||'want')?' selected':''}>${l}</option>`).join('')}</select></label>
+         <button data-act="rename" data-id="${p.id}" role="menuitem">Rename</button>
+         <button data-act="editaddr" data-id="${p.id}" role="menuitem">Edit the address</button>
          <button data-act="move" data-id="${p.id}" role="menuitem">Move the pin on the map</button>
          <button data-act="glink" data-id="${p.id}" role="menuitem">${p.gid?'Relink to a Google place':'Find on Google and link'}</button>
          <button data-act="home" data-id="${p.id}" role="menuitem">Set as home base</button>
@@ -1789,8 +1791,11 @@ $('#list').addEventListener('keydown',e=>{
 $('#list').addEventListener('focusout',e=>{const el=e.target.closest('[contenteditable="true"]');if(el){const c=el.dataset.cancel==='1';delete el.dataset.cancel;finishEdit(el,c);}});
 $('#list').addEventListener('paste',e=>{const el=e.target.closest('[contenteditable="true"]');if(!el||clipImages(e.clipboardData).length)return;e.preventDefault();document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text/plain'));});
 
+/* phones can't double-click: a tap on the bio edits it straight away */
+function TOUCH(){return matchMedia('(hover: none)').matches;}
 $('#list').onclick=e=>{
   if(e.target.closest('[contenteditable="true"],.menu label,.menu select'))return;
+  const bio=TOUCH()&&!openMenu&&e.target.closest('[data-edit="notes"]');if(bio){startEdit(bio);return;}
   const img=e.target.closest('img[data-lb]');if(img)return app.lightbox(img.dataset.lb,+img.dataset.i);
   const b=e.target.closest('[data-act]');
   if(!b){
@@ -1806,6 +1811,7 @@ $('#list').onclick=e=>{
   if(act==='photo')return app.addPhoto(id);
   if(act==='menu'){openMenu=openMenu===id?null:id;renderList();return;}
   if(act==='move'){renderList();return startMove(id);}
+  if(act==='rename'||act==='editaddr'){renderList();const el=document.querySelector(`#list [data-edit="${act==='rename'?'name':'address'}"][data-id="${id}"]`);if(el)startEdit(el);return;}
   if(act==='glink'){if(G_OK===false){toast('Connect Google first. See the setup steps.');return;}linkTarget=id;closeSheetKeepLink();$('#gq').value=p.name;map.setView([p.lat,p.lng],16);doSearch();return;}
   if(act==='home'){S.homeId=id;save();refresh();toast('Home base updated');return;}
   if(act==='untrip'){detach(id);save();refresh();toast('Removed from all days');return;}
