@@ -328,9 +328,8 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
 .hmax{display:flex;align-items:center;gap:3px;margin-left:auto}
 .hmax input{width:64px}
 .hb3{color:var(--ink-3);font-size:11.5px;line-height:1.4}
+.hbsum{font-size:12.5px;font-weight:700;color:var(--ink);background:var(--wash);border-radius:8px;padding:6px 9px}
 .hotelbar.flash{animation:flash 1.4s ease-out}
-.maptools #hotelsBtn[aria-pressed="true"]{background:var(--line);border-color:var(--line);color:#fff}
-.maptools #hotelsBtn[hidden]{display:none}
 .mini .htag{font-size:10.5px;padding:0 6px}
 .mini .hprice b{font-size:12.5px}
 .chipsbar{display:flex;align-items:center;gap:6px;margin:-2px 0 8px;font-size:12px;color:var(--ink-3);font-weight:700}
@@ -486,8 +485,6 @@ body.collapsed .totop,body.collapsed #panel>.catbar{display:none}
   <div class="maptools">
     <button id="tglStations" aria-pressed="true">Stations</button>
     <button id="fitAll">Show all</button>
-    <button id="hotelsBtn" hidden aria-pressed="false" title="Hotel dates, price and amenity filters">Hotel filters</button>
-    <button id="fitRoute">Show route</button>
   </div>
   <div class="legend" id="legend" aria-label="Show or hide categories"></div>
   <div class="gsearch">
@@ -1528,26 +1525,41 @@ function hotelHtml(o,compact){
 /* amenity filter: hide lodging known to lack a ticked amenity */
 const hotelFiltering=()=>S.amen.length>0||S.maxUsd>0;
 /* hotel filters: hide lodging known to lack a ticked amenity, or cheapest room over the max price */
+/* why a hotel passes or fails the filters: ok, checking (still loading), none (not on Rakuten), amen, sold, price */
+function hotelStatus(p){
+  const d=hotelData(p);if(!d)return 'checking';if(d.none)return 'none';
+  if(!S.amen.every(k=>d.amen[k]))return 'amen';
+  if(S.maxUsd>0&&tripKey()){
+    if(!d.price)return 'checking';
+    if(d.price.soldOut)return 'sold';
+    const fx=HC.fx;if(fx&&d.price.min/fx.jpy>S.maxUsd)return 'price';
+  }
+  return 'ok';
+}
 function amenOk(p){
   if(!hotelFiltering()||!LODGE(p))return true;
-  const d=hotelData(p);if(!d||d.none)return true;
-  if(!S.amen.every(k=>d.amen[k]))return false;
-  if(S.maxUsd>0&&tripKey()&&d.price){
-    if(d.price.soldOut)return false;
-    const fx=HC.fx;if(fx&&d.price.min/fx.jpy>S.maxUsd)return false;
-  }
-  return true;
+  return !['amen','sold','price'].includes(hotelStatus(p));
 }
+/* "5 match · 20 over $300 · 8 no rooms · 3 missing amenity · checking 4…" */
+function hotelSummary(list){
+  const c={ok:0,none:0,checking:0,amen:0,sold:0,price:0};list.forEach(p=>c[hotelStatus(p)]++);
+  const parts=[`${c.ok+c.none} match`];
+  if(c.price)parts.push(`${c.price} over $${S.maxUsd}`);
+  if(c.sold)parts.push(`${c.sold} no rooms`);
+  if(c.amen)parts.push(`${c.amen} missing amenity`);
+  if(c.checking)parts.push(`checking ${c.checking}…`);
+  return parts.join(' · ');
+}
+const allLodging=()=>[...S.places.filter(LODGE),...S.layers.filter(l=>!S.hidden.includes(l.id)&&lodgeLayer(l)).flatMap(l=>l.items)];
 const lodgingShown=()=>!S.hidden.includes('housing')||!S.hidden.includes('onsen')||S.layers.some(l=>!S.hidden.includes(l.id)&&lodgeLayer(l));
 function renderHotelBar(){
-  const show=lodgingShown();$('#hotelsBtn').hidden=!show||RK_OK===false;$('#hotelsBtn').setAttribute('aria-pressed',hotelFiltering());
   const el=$('#hotelbar');
   if(RK_OK===false){el.innerHTML='<p class="hint" style="margin:0">Hotel prices are unavailable right now.</p>';return;}
-  if(el.contains(document.activeElement))return;
+  if(el.contains(document.activeElement)){const sm=$('#hbsum');if(sm)sm.textContent=hotelSummary(allLodging());return;}
   const t=S.trip;
   el.innerHTML=`<div class="hb1"><b>Hotels</b><label>In <input type="date" id="tin" value="${t.in}"></label><label>Out <input type="date" id="tout" value="${t.out}"${t.in?` min="${t.in}"`:''}></label><label><select id="tad" aria-label="Guests">${[1,2,3,4].map(n=>`<option value="${n}"${n==t.adults?' selected':''}>${n} guest${n>1?'s':''}</option>`).join('')}</select></label></div>
     <div class="hb2">${AMEN.map(([k,l])=>`<button class="afilt" data-amen="${k}" aria-pressed="${S.amen.includes(k)}">${l}</button>`).join('')}<label class="hmax">Max <span>$</span><input type="number" id="tmax" min="0" step="10" inputmode="numeric" placeholder="any" value="${S.maxUsd||''}" aria-label="Maximum price per night in US dollars"> / night</label></div>
-    <small class="hb3">${!t.in?'Set dates to see prices and use the max price. ':''}${hotelFiltering()?'Showing only hotels that match. ':'Tap an amenity or set a max price to filter hotels. '}Prices are per room per night on Rakuten.</small>`;
+    ${hotelFiltering()?`<div class="hbsum" id="hbsum">${esc(hotelSummary(allLodging()))}</div>`:''}<small class="hb3">${!t.in?'Set dates to see prices and use the max price. ':''}${hotelFiltering()?'Only matching hotels show in the list and on the map. Hotels with no rooms on Rakuten for your dates stay hidden whatever the price. ':'Tap an amenity or set a max price to filter hotels. '}Prices are per room per night on Rakuten.</small>`;
 }
 $('#hotelbar').addEventListener('change',e=>{
   const t=S.trip;
@@ -1557,13 +1569,13 @@ $('#hotelbar').addEventListener('change',e=>{
   if(e.target.id==='tmax')S.maxUsd=Math.max(0,parseInt(e.target.value,10)||0);
   save();e.target.blur();refresh();
 });
+let tmaxT;$('#hotelbar').addEventListener('input',e=>{if(e.target.id!=='tmax')return;clearTimeout(tmaxT);tmaxT=setTimeout(()=>{S.maxUsd=Math.max(0,parseInt(e.target.value,10)||0);save();refresh();},400);});
 $('#hotelbar').addEventListener('click',e=>{const b=e.target.closest('[data-amen]');if(!b)return;const k=b.dataset.amen;S.amen=S.amen.includes(k)?S.amen.filter(x=>x!==k):[...S.amen,k];save();refresh();});
 function jumpToHotelBar(){
   setCollapsed(false);showTab('itin');
   const el=$('#hotelbar');$('#tab-itin').scrollTop=0;
   el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');
 }
-$('#hotelsBtn').onclick=jumpToHotelBar;
 document.addEventListener('click',e=>{if(e.target.closest('[data-hjump]')){e.stopPropagation();jumpToHotelBar();}},true);
 document.addEventListener('click',e=>{
   const w=e.target.closest('[data-hwrong]');if(!w)return;
@@ -1622,7 +1634,7 @@ function renderDots(){
   $('#dots').innerHTML=S.layers.filter(l=>!S.hidden.includes(l.id)).map(l=>{
     const np=l.items.filter(d=>d.pin).length,lodge=lodgeLayer(l);
     const items=[...l.items.filter(d=>d.pin),...l.items.filter(d=>!d.pin)].filter(d=>amenOk(d));
-    return `<details class="dlayer" data-lid="${l.id}"${openLayers.has(l.id)?' open':''}><summary><span class="dot" style="--c:${l.color}"></span><span class="lname">${esc(l.name)}</span><small>${l.items.length}${np?` · ${np} pinned`:''}${lodge&&hotelFiltering()?` · ${items.length} match`:''}</small>${np?`<button class="ponly" data-lponly="${l.id}" aria-pressed="${!!l.pinnedOnly}" title="Show only the pinned ones on the map">Pinned only</button>`:''}<button class="del" data-ldel="${l.id}">Delete</button></summary>
+    return `<details class="dlayer" data-lid="${l.id}"${openLayers.has(l.id)?' open':''}><summary><span class="dot" style="--c:${l.color}"></span><span class="lname">${esc(l.name)}</span><small>${l.items.length}${np?` · ${np} pinned`:''}${lodge&&hotelFiltering()?` · ${hotelSummary(l.items)}`:''}</small>${np?`<button class="ponly" data-lponly="${l.id}" aria-pressed="${!!l.pinnedOnly}" title="Show only the pinned ones on the map">Pinned only</button>`:''}<button class="del" data-ldel="${l.id}">Delete</button></summary>
       ${items.map(d=>{const open=d.id===openDot;return `<div class="dotrow${d.id===selected?' sel':''}${open?' open':''}" data-id="${d.id}"><span class="dot${d.pin?' pin':''}" style="--c:${l.color}"></span><div><b>${esc(d.name)}</b>${d.address?`<div class="mline"><button class="copy" onclick="app.copyAddr('${d.id}',event)" aria-label="Copy address of ${esc(d.name)}" title="Copy address">${COPY_ICON}</button><span>${esc(d.address)}</span></div>`:''}${lodge&&openLayers.has(l.id)?hotelHtml(d,!open):''}${open?`<div class="dmore">${infoHtml(d.gid,null,`data-dthumb="${d.id}"`)}</div>`:''}</div><div class="dacts"><button class="pbtn" data-dpin="${d.id}" aria-pressed="${!!d.pin}" aria-label="${d.pin?'Unpin':'Pin'} ${esc(d.name)}" title="${d.pin?'Unpin':'Pin to the top'}">${PIN_ICON}</button><button class="xbtn" data-drm="${d.id}" aria-label="Remove ${esc(d.name)}" title="Remove">✕</button></div></div>`;}).join('')}</details>`;
   }).join('');
 }
@@ -2010,7 +2022,6 @@ $('#q').oninput=()=>{$('#qx').hidden=!$('#q').value;renderList();};
 $('#qx').onclick=()=>{$('#q').value='';$('#qx').hidden=true;renderList();$('#q').focus();};
 $('#tglStations').onclick=e=>{const on=map.hasLayer(stationLayer);on?map.removeLayer(stationLayer):map.addLayer(stationLayer);e.currentTarget.setAttribute('aria-pressed',!on);};
 $('#fitAll').onclick=()=>{const pts=S.places.filter(visible).map(p=>[p.lat,p.lng]);if(pts.length)map.fitBounds(pts,{padding:[40,40]});};
-$('#fitRoute').onclick=()=>{const pts=routeStops().map(({p})=>[p.lat,p.lng]);if(pts.length>1)map.fitBounds(pts,{padding:[50,50]});else if(pts.length)map.setView(pts[0],15);showTab('route');};
 
 /* ---------- backup (with photos) ---------- */
 const toDataURL=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b);});
