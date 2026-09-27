@@ -523,7 +523,7 @@ const mkPlace=([cat,name,lat,lng,notes,status])=>({id:uid(),cat,name,lat,lng,not
 function seedState(){
   const places=SEED.map(mkPlace);
   const homeId=places[SEED.findIndex(r=>r[6])].id;
-  return {v:4,places,homeId,queue:[],days:[{id:uid(),name:'Day 1',stops:[],modes:{},loop:true}],activeDay:0,hidden:[]};
+  return {v:5,places,homeId,queue:[],days:[{id:uid(),name:'Day 1',stops:[],modes:{},loop:true}],activeDay:0,hidden:[]};
 }
 function migrate(s){
   s.favOnly??=false;
@@ -531,7 +531,8 @@ function migrate(s){
   s.days.forEach(d=>{d.id??=uid();d.modes??={};d.stops??=[];});
   if(!s.v||s.v<2){ANCHORS.forEach(r=>{if(!s.places.some(p=>p.name===r[1]))s.places.unshift(mkPlace(r));});}
   s.places.forEach(p=>{p.photos??=[];p.notes??='';if(!p.address&&ADDR[p.name])p.address=ADDR[p.name];p.address??='';});
-  s.v=4;
+  if(s.v<5)s.days.forEach(d=>d.modes={});
+  s.v=5;
   return s;
 }
 let S;
@@ -578,30 +579,42 @@ const OSRM={foot:'https://routing.openstreetmap.de/routed-foot/route/v1/foot/',c
 const ck=(prof,a,b)=>`${prof}:${(+a.lat).toFixed(5)},${(+a.lng).toFixed(5)};${(+b.lat).toFixed(5)},${(+b.lng).toFixed(5)}`;
 let rcT;function saveRC(){clearTimeout(rcT);rcT=setTimeout(()=>{try{localStorage.setItem(RKEY,JSON.stringify(RC))}catch(e){}},600);}
 let soonT;function soon(){clearTimeout(soonT);soonT=setTimeout(()=>{renderList();renderGroups();renderRoute();refreshPopup();},300);}
+/* the free routing server limits bursts, so ask it two routes at a time with a short gap */
 const jobs=[];let active=0;
-function pump(){while(active<3&&jobs.length){const j=jobs.shift();active++;j().finally(()=>{active--;pump();});}}
+function pump(){while(active<2&&jobs.length){const j=jobs.shift();active++;j().finally(()=>setTimeout(()=>{active--;pump();},250));}}
+const TAXI_MPH=12;
+/* rough street distance and time from a straight line, used until (or if) the routing server answers */
+function estimate(prof,a,b){const d=miles(a,b);return prof==='foot'?{mi:walkMi(d),min:walkMin(d),est:1}:{mi:d*1.3,min:d*1.3/TAXI_MPH*60,est:1};}
 function street(prof,a,b,needGeo){
   if(miles(a,b)<0.005)return {mi:0,min:0};
   const k=ck(prof,a,b);
-  if(FAIL[k])return {fail:1};
   const c=RC[k];
   if(c&&(!needGeo||GEO[k]))return c;
-  if(!PENDING[k]){
+  const f=FAIL[k];
+  if(!PENDING[k]&&!(f&&(f.n>=4||Date.now()<f.until))){
     PENDING[k]=1;
     jobs.push(async()=>{
       try{
         const r=await fetch(`${OSRM[prof]}${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`);
+        if(!r.ok)throw 0;
         const j=await r.json();const rt=j.routes&&j.routes[0];
         if(!rt)throw 0;
-        RC[k]={mi:rt.distance/1609.344,min:rt.duration/60};
+        RC[k]={mi:rt.distance/1609.344,min:rt.duration/60};delete FAIL[k];
         GEO[k]=rt.geometry.coordinates.map(([x,y])=>[y,x]);saveRC();
-      }catch(e){if(!RC[k])FAIL[k]=1;}
+      }catch(e){
+        const n=(FAIL[k]?.n||0)+1,wait=15000*2**n;
+        FAIL[k]={n,until:Date.now()+wait};
+        if(n<4)setTimeout(soon,wait+100);
+      }
       delete PENDING[k];soon();
     });
     pump();
   }
-  return c||null;
+  if(c)return c;
+  return f?estimate(prof,a,b):null;
 }
+/* street route if known, otherwise an estimate that is replaced once the route loads */
+const route=(prof,a,b)=>street(prof,a,b)||estimate(prof,a,b);
 const geo=(prof,a,b)=>GEO[ck(prof,a,b)];
 function homeDist(p){
   const h=byId(S.homeId);if(!h)return null;
@@ -612,18 +625,43 @@ function homeText(p){
   const r=homeDist(p);
   if(!r)return byId(S.homeId)?'Measuring street distance from home…':'';
   if(r.home)return 'Your home base';
-  if(r.fail)return 'Street distance unavailable right now';
-  return `${fmtMi(r.mi)} from home`;
+  return `${r.est?'About ':''}${fmtMi(r.mi)} from home`;
 }
-const stepOf=(t,txt,r,extra)=>r?(r.fail?{t,txt,fail:1,...extra}:{t,txt,mi:r.mi,min:r.min,...extra}):{t,txt,pending:1,...extra};
+const stepOf=(t,txt,r,extra)=>r?{t,txt,mi:r.mi,min:r.min,est:r.est,...extra}:{t,txt,pending:1,...extra};
+const MODE_NAMES={auto:'Auto',walk:'Walk',train:'Train',taxi:'Taxi',bus:'City bus',highway:'Highway bus'};
+const WALK_MAX=20,TAXI_SAVES=20,STATION_WALK_MAX=12;
+function trainLeg(a,b){
+  const sa=nearestStation(a).s,sb=nearestStation(b).s;
+  if(sa===sb)return null;
+  const rail=miles(sa,sb)*1.3;
+  return finish({mode:'train',sa,sb,steps:[
+    stepOf('Walk',`to ${sa.name} Stn`,route('foot',a,sa),{prof:'foot',a,b:sa}),
+    {t:'Train',txt:`${sa.name} to ${sb.name}`,mi:rail,min:rail/17*60+7,rail:1},
+    stepOf('Walk',`to ${b.name}`,route('foot',sb,b),{prof:'foot',a:sb,b})]},a,b);
+}
+function taxiLeg(a,b){
+  const r=route('car',a,b);
+  /* routing assumes empty roads: add Tokyo traffic and a few minutes to get a cab */
+  return finish({mode:'taxi',steps:[{t:'Taxi',txt:`to ${b.name}`,mi:r.mi,min:r.min*1.3+4,est:r.est,prof:'car',a,b}]},a,b);
+}
 function legPlan(a,b,mode){
-  const d=miles(a,b),sa=nearestStation(a).s,sb=nearestStation(b).s;
-  const walkAB=()=>stepOf('Walk',`to ${b.name}`,street('foot',a,b),{prof:'foot',a,b});
+  const d=miles(a,b);
+  const walkAB=()=>finish({mode:'walk',steps:[stepOf('Walk',`to ${b.name}`,route('foot',a,b),{prof:'foot',a,b})]},a,b);
   if(mode==='auto'){
+    /* walk if it's 20 min or less; taxi if it beats the train by 20+ min or the stations are a long walk; otherwise train */
+    const w=route('foot',a,b);
     if(d>40)mode='highway';
-    else{const w=street('foot',a,b);mode=w&&!w.fail?(w.mi<=1?'walk':'train'):(d<=0.8?'walk':'train');}
+    else if(w.min<=WALK_MAX)mode='walk';
+    else{
+      const tr=trainLeg(a,b),tx=taxiLeg(a,b);
+      const easy=tr&&tr.steps.filter(x=>x.t==='Walk').every(x=>x.pending||x.min<=STATION_WALK_MAX);
+      mode=!tr||tx.min<=tr.min-TAXI_SAVES||!easy?'taxi':'train';
+      const plan=mode==='taxi'?tx:tr;plan.auto=1;return plan;
+    }
+    const plan=mode==='walk'?walkAB():legPlan(a,b,mode);plan.auto=1;return plan;
   }
-  if(mode==='walk')return finish({mode:'walk',steps:[walkAB()]},a,b);
+  if(mode==='walk')return walkAB();
+  if(mode==='taxi')return taxiLeg(a,b);
   if(mode==='highway'||(d>40&&mode==='train')){
     const c={lat:35.68,lng:139.75};
     const tokyoSide=miles(a,c)<miles(b,c)?a:b;
@@ -635,36 +673,28 @@ function legPlan(a,b,mode){
     const getTo=(x,y,label)=>{
       if(miles(x,y)<0.02)return;
       if(miles(x,y)<1.2)steps.push(stepOf('Walk',`to ${label}`,street('foot',x,y),{prof:'foot',a:x,b:y}));
-      else steps.push(stepOf('Taxi',`to ${label}`,street('car',x,y),{prof:'car',a:x,b:y}));
+      else{const r=street('car',x,y);steps.push(stepOf('Taxi',`to ${label}`,r&&{...r,min:r.min*1.3+4},{prof:'car',a:x,b:y}));}
     };
     getTo(a,from,from.name);
     const bus=street('car',from,to);
-    steps.push(bus&&!bus.fail?{t:'Bus',txt:`Highway bus ${from.name} to ${to.name}. Book seats ahead`,mi:bus.mi,min:bus.min*1.15+10,prof:'car',a:from,b:to}:stepOf('Bus',`Highway bus ${from.name} to ${to.name}`,bus,{prof:'car',a:from,b:to}));
+    steps.push(bus?{t:'Bus',txt:`Highway bus ${from.name} to ${to.name}. Book seats ahead`,mi:bus.mi,min:bus.min*1.15+10,est:bus.est,prof:'car',a:from,b:to}:stepOf('Bus',`Highway bus ${from.name} to ${to.name}`,null,{prof:'car',a:from,b:to}));
     getTo(to,b,b.name);
     return finish({mode:'highway',steps},a,b);
   }
   if(mode==='bus'){
     const r=street('car',a,b);
-    const main=r&&!r.fail?{t:'Bus',txt:'City bus. Check the exact route in Google Maps',mi:r.mi,min:r.mi/9*60+8,prof:'car',a,b}:stepOf('Bus','City bus',r,{prof:'car',a,b});
+    const main=r?{t:'Bus',txt:'City bus. Check the exact route in Google Maps',mi:r.mi,min:r.mi/9*60+8,est:r.est,prof:'car',a,b}:stepOf('Bus','City bus',null,{prof:'car',a,b});
     return finish({mode:'bus',steps:[{t:'Walk',txt:'to the nearest bus stop',min:4,nomi:1},main,{t:'Walk',txt:`to ${b.name}`,min:4,nomi:1}]},a,b);
   }
-  if(sa===sb)return finish({mode:'walk',steps:[walkAB()]},a,b);
-  const rail=miles(sa,sb)*1.3;
-  const plan=finish({mode:'train',sa,sb,steps:[
-    stepOf('Walk',`to ${sa.name} Stn`,street('foot',a,sa),{prof:'foot',a,b:sa}),
-    {t:'Train',txt:`${sa.name} to ${sb.name}`,mi:rail,min:rail/17*60+7,rail:1},
-    stepOf('Walk',`to ${b.name}`,street('foot',sb,b),{prof:'foot',a:sb,b})]},a,b);
-  const w=street('foot',a,b);
-  if(!plan.pending&&w&&!w.fail&&w.mi<1.6&&w.min<=plan.min+4)return finish({mode:'walk',steps:[walkAB()]},a,b);
-  return plan;
+  return trainLeg(a,b)||walkAB();
 }
 function finish(p,a,b){
   p.a=a;p.b=b;
-  p.pending=p.steps.some(x=>x.pending);p.fail=p.steps.some(x=>x.fail);
+  p.pending=p.steps.some(x=>x.pending);p.est=p.steps.some(x=>x.est);
   p.mi=p.steps.reduce((s,x)=>s+(x.mi||0),0);p.min=p.steps.reduce((s,x)=>s+(x.min||0),0);
   return p;
 }
-const gmaps=(a,b,m)=>`https://www.google.com/maps/dir/?api=1&origin=${a.lat},${a.lng}&destination=${b.lat},${b.lng}&travelmode=${m==='walk'?'walking':'transit'}`;
+const gmaps=(a,b,m)=>`https://www.google.com/maps/dir/?api=1&origin=${a.lat},${a.lng}&destination=${b.lat},${b.lng}&travelmode=${m==='walk'?'walking':m==='taxi'?'driving':'transit'}`;
 
 /* ---------- helpers ---------- */
 const $=s=>document.querySelector(s);
@@ -1219,7 +1249,7 @@ function favGroups(){
     const r=street('foot',a,b);
     let m=null;
     if(!r){pending=true;continue;}
-    m=r.fail?walkMin(d):r.min;
+    m=r.min;
     if(m<=WALK_GROUP_MIN){par[find(i)]=find(j);(link[a.id]??=[]).push({p:b,m});(link[b.id]??=[]).push({p:a,m});}
   }
   const map_={};favs.forEach((p,i)=>{(map_[find(i)]??=[]).push(p);});
@@ -1327,10 +1357,10 @@ function renderRoute(){
       if(!isHome&&nx.p.id===H)html+=addSel(nx.idx>=0?nx.idx:d.stops.length,hasBreaks?trip:0);
       const b=nx.p,key=p.id+'>'+b.id,mode=d.modes[key]||'auto',plan=legPlan(p,b,mode);
       legs.push(plan);totMi+=plan.mi;totMin+=plan.min;if(plan.pending)anyPending=true;
-      const stepTxt=s=>s.pending?`${esc(s.txt)}, calculating…`:s.fail?`${esc(s.txt)}, street route unavailable`:`${esc(s.txt)}, ${s.nomi?'':(s.rail?'about ':'')+fmtMi(s.mi)+', '}${fmtMin(s.min)}`;
+      const stepTxt=s=>s.pending?`${esc(s.txt)}, calculating…`:`${esc(s.txt)}, ${s.nomi?'':(s.rail||s.est?'about ':'')+fmtMi(s.mi)+', '}${fmtMin(s.min)}`;
       html+=`<li class="leg"><div class="row">
-         <select data-leg="${key}" aria-label="How to get there">${['auto','walk','train','bus','highway'].map(m=>`<option value="${m}"${m===mode?' selected':''}>${{auto:'Best guess',walk:'Walk',train:'Train',bus:'City bus',highway:'Highway bus'}[m]}</option>`).join('')}</select>
-         ${plan.pending?'<span>Calculating street route…</span>':`<span class="num2">${fmtMin(plan.min)}</span><span>${fmtMi(plan.mi)}</span>`}
+         <select data-leg="${key}" aria-label="How to get there">${Object.keys(MODE_NAMES).map(m=>`<option value="${m}"${m===mode?' selected':''}>${m==='auto'?`Auto: ${MODE_NAMES[plan.mode]}`:MODE_NAMES[m]}</option>`).join('')}</select>
+         ${plan.pending?'<span>Calculating street route…</span>':`<span class="num2">${plan.est?'~':''}${fmtMin(plan.min)}</span><span>${fmtMi(plan.mi)}</span>`}
          <a href="${gmaps(p,b,plan.mode)}" target="_blank" rel="noopener">Exact times</a></div>
          <ul>${plan.steps.map(s=>`<li><i>${s.t}</i><span>${stepTxt(s)}</span></li>`).join('')}</ul></li>`;
     }
@@ -1340,7 +1370,7 @@ function renderRoute(){
     <ol class="strip">${html}</ol>
     ${S.homeId&&d.stops[d.stops.length-1]!==S.homeId?'<button class="addhome" data-homeend="1">⌂ Go home, then start a new trip</button>':''}
     <div class="row2" style="margin-top:14px"><a class="btn ghost small" href="${all}" target="_blank" rel="noopener">Open all stops in Google Maps</a></div>
-    <p class="est">Tap ⌂ on a stop to go home for a break after it. Everything after a break is a new trip from home. Use ↑ ↓ to move a stop into the trip before or after a break. Walking distances follow streets and sidewalks, and bus and taxi distances follow roads. Train rides are estimated between stations. Tap Exact times on any leg for live train and bus schedules.</p>`;
+    <p class="est">Tap ⌂ on a stop to go home for a break after it. Everything after a break is a new trip from home. Use ↑ ↓ to move a stop into the trip before or after a break. Auto picks walking for walks of 20 minutes or less, a taxi when it saves 20 minutes or more over the train or the stations are a long walk away, and the train otherwise. Walking distances follow streets and sidewalks, and taxi and bus distances follow roads. Times marked ~ or about are estimates until the street route loads. Train rides are estimated between stations. Tap Exact times on any leg for live train and bus schedules.</p>`;
   drawRoute(legs);
 }
 let drawToken=0;
