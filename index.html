@@ -2168,16 +2168,19 @@ function renderRoute(){
 }
 /* train rides: the real track, traced along OpenStreetMap's rail lines; until it loads (or if it can't), follow the streets above the line */
 const RAILKEY='tokyo-planner-rail2';let RAIL={};try{RAIL=JSON.parse(localStorage.getItem(RAILKEY))||{}}catch(e){}
-const RAILPEND={},RAILFAIL={};
+const RAILPEND={},RAILFAIL={},RAILTRY={};
 function railGeo(a,b){
   const k=`${(+a.lat).toFixed(4)},${(+a.lng).toFixed(4)};${(+b.lat).toFixed(4)},${(+b.lng).toFixed(4)}`;
   if(RAIL[k])return RAIL[k];
-  if(!RAILPEND[k]&&!RAILFAIL[k]){RAILPEND[k]=1;
+  if(!RAILPEND[k]&&!RAILFAIL[k]&&!(RAILTRY[k]&&Date.now()-(RAILTRY[k+':t']||0)<20000*RAILTRY[k])){RAILPEND[k]=1;RAILTRY[k+':t']=Date.now();
     fetch(`/api/rail?a=${a.lat},${a.lng}&b=${b.lat},${b.lng}`).then(r=>r.ok?r.json():Promise.reject()).then(j=>{
       if(!j.pts?.length)throw 0;
       RAIL[k]=[{line:'',color:'',pts:j.pts}];
       try{localStorage.setItem(RAILKEY,JSON.stringify(RAIL))}catch(e){}
-    }).catch(()=>{RAILFAIL[k]=1;}).finally(()=>{delete RAILPEND[k];soon();});}
+    }).catch(()=>{
+      /* a busy map server: try again a little later, a few times, before settling on the street path */
+      const n=(RAILTRY[k]||0)+1;RAILTRY[k]=n;if(n>=3)RAILFAIL[k]=1;else setTimeout(soon,20000*n);
+    }).finally(()=>{delete RAILPEND[k];soon();});}
   return RAILFAIL[k]?'fail':null;
 }
 let drawToken=0;
