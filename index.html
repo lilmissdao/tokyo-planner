@@ -51,7 +51,14 @@ nav.tabs .count{display:inline-grid;place-items:center;min-width:18px;height:18p
 .chip{display:flex;flex-direction:column;align-items:center;gap:5px;border:0;background:none;padding:4px 0;font-size:11px;font-weight:700;color:var(--ink-2)}
 .chip .av{--s:40px}
 .chip[aria-pressed="false"]{color:var(--ink-3)}
-.chip[aria-pressed="false"] .av{background:#C9CED6}
+/* off: its own color, washed out */
+.chip[aria-pressed="false"] .av{background:color-mix(in srgb,var(--c) 38%,#fff);box-shadow:0 0 0 2px #fff,0 1px 2px rgba(28,34,48,.18)}
+@supports not (background:color-mix(in srgb,red 50%,white)){.chip[aria-pressed="false"] .av{background:var(--c);opacity:.4}}
+/* drag to reorder */
+.chip{-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
+.chip.dragging{opacity:.25}
+.chipghost{position:fixed;z-index:5000;pointer-events:none;transform:translate(-50%,-50%) scale(1.12);filter:drop-shadow(0 6px 12px rgba(28,34,48,.3))}
+body.chipdrag,body.chipdrag *{cursor:grabbing!important}
 .chip[data-favonly][aria-pressed="false"] .av{background:#fff;box-shadow:0 0 0 2px #E8B100}
 .chip[data-favonly][aria-pressed="false"] .av svg{stroke:#E8B100}
 .chip[data-favonly][aria-pressed="true"]{color:#8A6500}
@@ -1193,6 +1200,7 @@ map.on('zoomend',syncNames);syncNames();
 /* ---------- category toggles ---------- */
 const allShown=()=>!S.hidden.length&&!!S.favOnly;
 function renderChips(){
+  if(document.body.classList.contains('chipdrag'))return;
   $('#allBtn').textContent=allShown()?'Deselect all':'Select all';
   const nf=S.places.filter(p=>p.fav).length;
   const order=catOrder(),lay=k=>S.layers.find(l=>l.id===k);
@@ -1217,6 +1225,53 @@ function toggleCat(k){
 const layerAv=(l,size)=>`<span class="av" style="--c:${l.color};--s:${size}px">${glyph({icon:l.icon||'dot',svg:l.svg,emoji:l.emoji})}</span>`;
 function toggleLayer(id){const l=S.layers.find(x=>x.id===id);if(!l)return;const hide=!S.hidden.includes(id);S.hidden=hide?[...S.hidden,id]:S.hidden.filter(x=>x!==id);save();refresh();}
 function favAv(size,on){return `<span class="av" style="--c:#E8B100;--s:${size}px"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.3 5.4 5.7.6-4.3 3.9 1.3 5.8L12 15.8l-5 2.9 1.3-5.8L4 9l5.7-.6z"/></svg></span>`;}
+/* drag a category to a new spot: press and hold on a phone, click and drag on a computer */
+(function(){
+  const box=$('#chips');let t=null,drag=null,sx=0,sy=0,pid=null,noClick=false;
+  const keyOf=c=>c.dataset.cat||c.dataset.layer;
+  const stop=()=>{clearTimeout(t);t=null;};
+  function begin(chip,x,y){
+    const g=chip.cloneNode(true);g.classList.add('chipghost');g.style.width=chip.offsetWidth+'px';document.body.appendChild(g);
+    chip.classList.add('dragging');document.body.classList.add('chipdrag');drag={chip,g};move(x,y);
+    if(navigator.vibrate)navigator.vibrate(15);
+  }
+  function move(x,y){
+    if(!drag)return;drag.g.style.left=x+'px';drag.g.style.top=y+'px';
+    /* one-row bar: slide when near either end */
+    const r=box.getBoundingClientRect();if(!$('#catbar').classList.contains('open')){if(x<r.left+30)box.scrollLeft-=12;else if(x>r.right-30)box.scrollLeft+=12;}
+    const over=document.elementFromPoint(x,y)?.closest('#chips .chip');
+    if(!over||over===drag.chip||over.dataset.favonly)return;
+    const o=over.getBoundingClientRect(),open=$('#catbar').classList.contains('open');
+    const after=open?(y>o.bottom-o.height/3||(y>o.top&&x>o.left+o.width/2)):x>o.left+o.width/2;
+    box.insertBefore(drag.chip,after?over.nextSibling:over);
+  }
+  function end(){
+    stop();if(!drag)return;
+    drag.g.remove();drag.chip.classList.remove('dragging');document.body.classList.remove('chipdrag');
+    const shown=[...box.querySelectorAll('.chip:not([data-favonly])')].map(keyOf);drag=null;noClick=true;setTimeout(()=>noClick=false,350);
+    /* keep anything not on screen in its old place, then save the new order */
+    const rest=catOrder().filter(k=>!shown.includes(k));S.cats.order=[...shown,...rest];lastInput=Date.now();save();refresh();
+  }
+  box.addEventListener('pointerdown',e=>{
+    const chip=e.target.closest('.chip');if(!chip||chip.dataset.favonly||e.button>0)return;
+    sx=e.clientX;sy=e.clientY;pid=e.pointerId;
+    if(e.pointerType!=='mouse')t=setTimeout(()=>{t=null;begin(chip,sx,sy);},380);
+    else t={mouse:chip};
+  });
+  box.addEventListener('pointermove',e=>{
+    if(drag){move(e.clientX,e.clientY);return;}
+    if(!t)return;const moved=Math.hypot(e.clientX-sx,e.clientY-sy);
+    if(t.mouse){if(moved>6){const c=t.mouse;t=null;begin(c,e.clientX,e.clientY);}return;}
+    if(moved>8)stop();
+  });
+  /* while dragging with a finger, the page must not scroll */
+  box.addEventListener('touchmove',e=>{if(drag&&e.cancelable)e.preventDefault();},{passive:false});
+  document.addEventListener('pointermove',e=>{if(drag&&e.pointerType==='mouse')move(e.clientX,e.clientY);});
+  document.addEventListener('pointerup',end);document.addEventListener('pointercancel',()=>{if(drag)end();else stop();});
+  box.addEventListener('touchend',()=>{if(drag)end();else stop();});
+  box.addEventListener('contextmenu',e=>{if(drag||t)e.preventDefault();});
+  box.addEventListener('click',e=>{if(noClick){e.stopPropagation();e.preventDefault();}},true);
+})();
 $('#chips').onclick=e=>{
   if(e.target.closest('[data-favonly]')){S.favOnly=!S.favOnly;save();refresh();return;}
   const l=e.target.closest('[data-layer]');if(l)return toggleLayer(l.dataset.layer);
