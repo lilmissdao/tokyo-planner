@@ -2166,17 +2166,16 @@ function renderRoute(){
     <p class="est">Tap ⌂ on a stop to go home for a break after it. Everything after a break is a new trip from home. Use ↑ ↓ to move a stop into the trip before or after a break. Every leg starts as a taxi; change it with the menu on the leg. Auto puts your stops in the best order and picks walking for walks of 20 minutes or less, the train only when both stations are a short walk and the ride is under 20 minutes, and a taxi otherwise. Walking distances follow streets and sidewalks, and taxi and bus distances follow roads. Times marked ~ or about are estimates until the street route loads. Train rides are estimated between stations. Tap Exact times on any leg for live train and bus schedules.</p>`;
   drawRoute(legs);
 }
-/* train rides: the real track from Google's transit directions; until it loads (or if it can't), follow the streets above the line */
-const RAILKEY='tokyo-planner-rail';let RAIL={};try{RAIL=JSON.parse(localStorage.getItem(RAILKEY))||{}}catch(e){}
+/* train rides: the real track, traced along OpenStreetMap's rail lines; until it loads (or if it can't), follow the streets above the line */
+const RAILKEY='tokyo-planner-rail2';let RAIL={};try{RAIL=JSON.parse(localStorage.getItem(RAILKEY))||{}}catch(e){}
 const RAILPEND={},RAILFAIL={};
-function decodePoly(e){const out=[];let i=0,lat=0,lng=0;while(i<e.length){for(const k of [0,1]){let b,sh=0,r=0;do{b=e.charCodeAt(i++)-63;r|=(b&31)<<sh;sh+=5;}while(b>=32);const d=r&1?~(r>>1):r>>1;if(k)lng+=d;else lat+=d;}out.push([lat/1e5,lng/1e5]);}return out;}
 function railGeo(a,b){
   const k=`${(+a.lat).toFixed(4)},${(+a.lng).toFixed(4)};${(+b.lat).toFixed(4)},${(+b.lng).toFixed(4)}`;
   if(RAIL[k])return RAIL[k];
   if(!RAILPEND[k]&&!RAILFAIL[k]){RAILPEND[k]=1;
-    fetch(`/api/transit?a=${a.lat},${a.lng}&b=${b.lat},${b.lng}`).then(r=>r.ok?r.json():Promise.reject()).then(j=>{
-      if(!j.segs?.length)throw 0;
-      RAIL[k]=j.segs.map(s=>({line:s.line,color:s.color,pts:decodePoly(s.p)}));
+    fetch(`/api/rail?a=${a.lat},${a.lng}&b=${b.lat},${b.lng}`).then(r=>r.ok?r.json():Promise.reject()).then(j=>{
+      if(!j.pts?.length)throw 0;
+      RAIL[k]=[{line:'',color:'',pts:j.pts}];
       try{localStorage.setItem(RAILKEY,JSON.stringify(RAIL))}catch(e){}
     }).catch(()=>{RAILFAIL[k]=1;}).finally(()=>{delete RAILPEND[k];soon();});}
   return RAILFAIL[k]?'fail':null;
@@ -2189,7 +2188,7 @@ function drawRoute(legs){
     if(s.rail){
       const sa=plan.sa,sb=plan.sb,RL={color:'#1F3A93',weight:7,opacity:.9,lineCap:'round',lineJoin:'round'};
       const g=railGeo(sa,sb);
-      if(Array.isArray(g)){g.forEach(seg=>L.polyline(seg.pts,{...RL,color:seg.color||RL.color}).bindTooltip(seg.line||'Train',{sticky:true}).addTo(routeLayer));continue;}
+      if(Array.isArray(g)){g.forEach(seg=>L.polyline(seg.pts,{...RL,color:seg.color||RL.color}).addTo(routeLayer));continue;}
       street('car',sa,sb,true);const sg=geo('car',sa,sb);
       L.polyline(sg||[[sa.lat,sa.lng],[sb.lat,sb.lng]],RL).addTo(routeLayer);continue;
     }
