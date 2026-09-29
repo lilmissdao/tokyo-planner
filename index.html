@@ -207,6 +207,15 @@ hr{border:0;border-top:1px solid var(--rule);margin:18px 0}
 .cehead h2{margin:0 auto 0 0;font-size:18px}
 .cehint{font-size:13px!important;color:var(--ink-3)!important}
 #catEdList{display:grid;gap:6px}
+.cefav{border:1.5px solid var(--rule);border-radius:8px;padding:6px 8px;font-size:14px;font-weight:700;background:#fff;justify-self:start;max-width:100%}
+.cenote{font-size:12px;color:var(--ink-3);line-height:1.4}
+#catEd.merging .cerow>button:not(.ceicon),#catEd.merging .cerow>small,#catEd.merging .cerow>span,#catEd.merging #catEdNew{display:none}
+#catEd.merging .cerow{grid-template-columns:40px minmax(0,1fr) 28px;cursor:pointer}
+#catEd.merging .cerow .cename{pointer-events:none;border-color:transparent}
+#catEd.merging .cerow::after{content:"";width:22px;height:22px;border-radius:6px;border:2px solid var(--rule);justify-self:center}
+#catEd.merging .cerow.picked{border-color:var(--line);background:#F2F5FC}
+#catEd.merging .cerow.picked::after{background:var(--line);border-color:var(--line);box-shadow:inset 0 0 0 3px #fff}
+#catEdDoMerge[hidden],#catEdNew[hidden]{display:none}
 .cerow{display:grid;grid-template-columns:40px minmax(0,1fr) auto 34px 34px 34px;align-items:center;gap:4px;border:1.5px solid var(--rule);border-radius:12px;padding:5px 6px}
 .cerow .ceicon{border:0;background:none;padding:0;display:grid;place-items:center}
 .cerow .ceicon[aria-expanded="true"] .av{outline:2.5px solid var(--focus);outline-offset:2px}
@@ -553,7 +562,7 @@ body.collapsed .totop,body.collapsed #panel>.catbar{display:none}
 </div>
 <input type="file" id="photoInput" accept="image/*" multiple hidden>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<div class="dlg" id="catEd" hidden><div class="dlgbox cated" role="dialog" aria-modal="true" aria-labelledby="catEdT"><div class="cehead"><h2 id="catEdT">Edit categories</h2><button type="button" class="btn" id="catEdDone">Done</button></div><div id="catEdScroll"><p class="cehint">Tap an icon to change its picture and color. Use the arrows to reorder.</p><div id="catEdList"></div><button type="button" class="btn ghost" id="catEdNew">+ New category</button></div><div class="cetrack" id="cetrack" hidden><div class="cethumb" id="cethumb" role="scrollbar" aria-label="Drag to scroll the categories" aria-orientation="vertical"><i></i><i></i><i></i></div></div></div></div>
+<div class="dlg" id="catEd" hidden><div class="dlgbox cated" role="dialog" aria-modal="true" aria-labelledby="catEdT"><div class="cehead"><h2 id="catEdT">Edit categories</h2><button type="button" class="btn ghost" id="catEdMerge">Merge</button><button type="button" class="btn" id="catEdDone">Done</button></div><div id="catEdScroll"><p class="cehint">Tap an icon to change its picture and color. Use the arrows to reorder.</p><div id="catEdList"></div><button type="button" class="btn ghost" id="catEdNew">+ New category</button><button type="button" class="btn" id="catEdDoMerge" hidden>Merge</button></div><div class="cetrack" id="cetrack" hidden><div class="cethumb" id="cethumb" role="scrollbar" aria-label="Drag to scroll the categories" aria-orientation="vertical"><i></i><i></i><i></i></div></div></div></div>
 <div class="dlg" id="dlg" hidden><div class="dlgbox" role="dialog" aria-modal="true" aria-labelledby="dlgMsg"><p id="dlgMsg"></p><div id="dlgBody"></div><div class="dlgbtns"><button type="button" class="btn ghost" id="dlgNo">Cancel</button><button type="button" class="btn" id="dlgYes">OK</button></div></div></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
@@ -764,11 +773,11 @@ const mkPlace=([cat,name,lat,lng,notes,status])=>({id:uid(),cat,name,lat,lng,not
 function seedState(){
   const places=SEED.map(mkPlace);
   const homeId=places[SEED.findIndex(r=>r[6])].id;
-  return {v:7,places,homeId,layers:[],trip:{in:'',out:'',adults:2},amen:[],maxUsd:0,queue:[],days:[{id:uid(),name:'Day 1',stops:[],modes:{},loop:true}],activeDay:0,hidden:[],cats:{order:[],edit:{},deleted:[],custom:[]}};
+  return {v:7,places,homeId,layers:[],trip:{in:'',out:'',adults:2},amen:[],maxUsd:0,queue:[],days:[{id:uid(),name:'Day 1',stops:[],modes:{},loop:true}],activeDay:0,hidden:[],cats:{order:[],edit:{},deleted:[],custom:[],favTo:{}}};
 }
 function migrate(s){
   s.favOnly??=false;
-  s.cats??={};s.cats.order??=[];s.cats.edit??={};s.cats.deleted??=[];s.cats.custom??=[];
+  s.cats??={};s.cats.order??=[];s.cats.edit??={};s.cats.deleted??=[];s.cats.custom??=[];s.cats.favTo??={};
   s.hidden??=[];s.queue??=[];s.layers??=[];s.trip??={in:'',out:'',adults:2};s.amen??=[];s.maxUsd??=0;s.days??=[{id:uid(),name:'Day 1',stops:[],modes:{},loop:true}];
   s.days.forEach(d=>{d.id??=uid();d.modes??={};d.stops??=[];});
   if(!s.v||s.v<2){ANCHORS.forEach(r=>{if(!s.places.some(p=>p.name===r[1]))s.places.unshift(mkPlace(r));});}
@@ -1724,36 +1733,49 @@ function hotelSummary(list){
 }
 const allLodging=()=>[...S.layers.filter(l=>!S.hidden.includes(l.id)&&lodgeLayer(l)).flatMap(l=>l.items)];
 const STAR_ICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.3 5.4 5.7.6-4.3 3.9 1.3 5.8L12 15.8l-5 2.9 1.3-5.8L4 9l5.7-.6z"/></svg>';
-function favHotel(o,quiet){
+/* where a category's favorites go: another (place) category, or '' to just get a star.
+   Hotel search categories send theirs to Housing unless you pick something else */
+function favTarget(k){
+  if(!k)return '';const l=S.layers.find(x=>x.id===k);
+  const t=l?(l.favTo!==undefined?l.favTo:(lodgeLayer(l)?'housing':'')):((S.cats.favTo||{})[k]||'');
+  return t&&t!==k&&CATS[t]?t:'';
+}
+/* the search category that takes back what's unfavorited in category k (Housing always has one: "hotels other") */
+function returnLayer(k,make){
+  const ls=S.layers.filter(l=>favTarget(l.id)===k);
+  let l=ls.find(x=>/other/i.test(x.name))||ls[0]||null;
+  if(!l&&k==='housing'&&make){l={id:'l_'+uid(),name:'hotels other',color:pickColor(),q:'hotel',items:[]};S.layers.push(l);}
+  return l;
+}
+/* favorite a search-category location (or search result): it becomes a saved place in its "move to" category */
+function favHotel(o,quiet,cat){
   let p=S.places.find(x=>(o.gid&&x.gid===o.gid)||(Math.abs(x.lat-o.lat)<1e-5&&Math.abs(x.lng-o.lng)<1e-5));
   const l=o.dotId&&layerOf(o.dotId),dot=l&&l.items.find(d=>d.id===o.dotId);
-  if(!p){p={id:uid(),cat:CATS.housing?'housing':'other',name:o.name,lat:o.lat,lng:o.lng,address:o.address||'',notes:'',status:'want',photos:[],...(o.gid?{gid:o.gid}:{}),...(o.rk?{rk:o.rk}:{})};S.places.push(p);
+  cat=cat||(l&&favTarget(l.id))||(CATS.housing?'housing':'other');
+  if(!p){p={id:uid(),cat,name:o.name,lat:o.lat,lng:o.lng,address:o.address||'',notes:'',status:'want',photos:[],...(o.gid?{gid:o.gid}:{}),...(o.rk?{rk:o.rk}:{})};S.places.push(p);
     /* remember where it came from, so unfavoriting puts it back */
     if(dot)p.fromDot={lid:l.id,d:{...dot,fav:false}};}
   p.fav=true;S.hidden=S.hidden.filter(c=>c!==p.cat);
   if(dot){l.items=l.items.filter(d=>d.id!==o.dotId);if(popupPlaceId===o.dotId)map.closePopup();}
-  if(!quiet){save();refresh();toast(`${p.name} added to Housing as a favorite`);}return p;
+  if(!quiet){save();refresh();toast(`${p.name} favorited`);}return p;
 }
-/* unfavoriting a hotel that came from a search category moves it back there */
-/* the search category that holds hotels you haven't favorited: "hotels other", or made if missing */
-function otherHotels(){
-  const ls=S.layers.filter(lodgeLayer);
-  let l=ls.find(x=>/other/i.test(x.name))||ls.find(x=>x.name!==CATS.housing?.label)||null;
-  if(!l){l={id:'l_'+uid(),name:'hotels other',color:pickColor(),q:'hotel',items:[]};S.layers.push(l);}
-  return l;
-}
+/* unfavorite a saved place: back to the category it came from, or out to its search category */
 function unfavHotel(p){
-  if(p.id===S.homeId){p.fav=false;delete p.fromDot;return;}
-  const l=(p.fromDot&&S.layers.find(x=>x.id===p.fromDot.lid))||otherHotels();
-  const d=p.fromDot?{...p.fromDot.d,name:p.name}:{id:'d_'+uid(),name:p.name,lat:p.lat,lng:p.lng,address:p.address||'',lodging:true,...(p.gid?{gid:p.gid}:{}),...(p.rk?{rk:p.rk}:{})};
+  if(p.id===S.homeId){p.fav=false;delete p.fromDot;delete p.favFrom;return;}
+  if(p.favFrom&&CATS[p.favFrom]){p.cat=p.favFrom;delete p.favFrom;p.fav=false;return;}
+  const l=(p.fromDot&&S.layers.find(x=>x.id===p.fromDot.lid))||returnLayer(p.cat,p.cat==='housing');
+  if(!l){p.fav=false;delete p.fromDot;delete p.favFrom;return;}
+  const d=p.fromDot?{...p.fromDot.d,name:p.name}:{id:'d_'+uid(),name:p.name,lat:p.lat,lng:p.lng,address:p.address||'',...(LODGE(p)?{lodging:true}:{}),...(p.gid?{gid:p.gid}:{}),...(p.rk?{rk:p.rk}:{})};
   if(!l.items.some(x=>x.id===d.id))l.items.push(d);
   p.fav=false;S.places=S.places.filter(x=>x!==p);detach(p.id);
   if(popupPlaceId===p.id)map.closePopup();if(selected===p.id)selected=null;
 }
-/* Hotels (Housing) holds only favorites: favorited hotels in search categories move in, the rest of Housing moves out to "hotels other" */
+const needsMove=p=>!p.fav&&p.id!==S.homeId&&(p.favFrom||returnLayer(p.cat,p.cat==='housing'));
+/* put everything where the "move to" rules say: favorites in, unfavorited out (a category fed by a search category keeps only favorites) */
 function settleHotelFavs(){
-  S.layers.forEach(l=>{if(lodgeLayer(l))l.items.filter(d=>d.fav).forEach(d=>favHotel({...d,dotId:d.id},true));});
-  S.places.filter(p=>p.cat==='housing'&&!p.fav&&p.id!==S.homeId).forEach(unfavHotel);
+  S.layers.forEach(l=>{if(favTarget(l.id))l.items.filter(d=>d.fav).forEach(d=>favHotel({...d,dotId:d.id},true));});
+  S.places.forEach(p=>{if(p.fav&&p.id!==S.homeId){const t=favTarget(p.cat);if(t){p.favFrom=p.cat;p.cat=t;}}});
+  S.places.filter(needsMove).forEach(unfavHotel);
 }
 const lodgingShown=()=>!S.hidden.includes('housing')||!S.hidden.includes('onsen')||S.layers.some(l=>!S.hidden.includes(l.id)&&lodgeLayer(l));
 function renderHotelBar(){
@@ -2001,10 +2023,12 @@ document.addEventListener('keydown',e=>{if($('#lightbox').hidden)return;if(e.key
 
 /* ---------- grouping: favorites within a 20-minute walk ---------- */
 function toggleFav(id){
-  const p=byId(id);if(!p)return;
-  /* a hotel from a search category joins Hotels (Housing) when favorited, from anywhere */
-  if(String(id).startsWith('d_')&&!p.fav&&lodgeLayer(layerOf(id)))return favHotel({...p,dotId:id});
-  if(p.fav&&(p.fromDot||p.cat==='housing'))unfavHotel(p);else p.fav=!p.fav;
+  const p=byId(id);if(!p)return;const dot=String(id).startsWith('d_');
+  /* follow the category's "when favorited, move to" setting, and undo it when unfavorited */
+  if(dot&&!p.fav&&favTarget(layerOf(id)?.id))return favHotel({...p,dotId:id});
+  if(!dot&&!p.fav){const t=p.id!==S.homeId&&favTarget(p.cat);if(t){p.favFrom=p.cat;p.cat=t;S.hidden=S.hidden.filter(c=>c!==t);}p.fav=true;}
+  else if(!dot&&(p.fromDot||p.favFrom||returnLayer(p.cat,p.cat==='housing')))unfavHotel(p);
+  else p.fav=!p.fav;
   save();refresh();toast(p.fav?`${p.name} favorited`:`${p.name} removed from favorites`);
 }
 const WALK_GROUP_MIN=20;
@@ -2273,7 +2297,7 @@ document.querySelector('.chipsbar').onclick=e=>{
 };
 /* ---------- category editor: rename, icon, color, order, add, delete ---------- */
 const PALETTE=['#EC4899','#E4007F','#AD1457','#E60012','#D84315','#FF7043','#F39700','#E8B100','#AFB42B','#558B2F','#009944','#00ADA9','#00A7DB','#1E88E5','#3949AB','#1F3A93','#5E35B1','#7B1FA2','#9B7CB6','#BB641D','#6D4C41','#546E7A','#9CAEB7','#1C2230'];
-let ceOpen=null;
+let ceOpen=null,ceMerge=null;
 const ceLayer=k=>S.layers.find(l=>l.id===k);
 const ceInfo=k=>{const l=ceLayer(k);return l?{label:l.name,color:l.color,icon:l.icon||'dot',svg:l.svg,emoji:l.emoji,n:l.items.length,l}:{...CATS[k],n:S.places.filter(p=>p.cat===k).length};};
 let aiRes=null;
@@ -2304,8 +2328,22 @@ function renderCatEd(){
       ${k==='other'?'<span></span>':`<button type="button" class="cex" data-ce="del" aria-label="Delete ${esc(c.label)}">✕</button>`}
       ${ceOpen===k?`<div class="cestyle"><b>Your own icon</b>${aiHtml(k,c)}<b>Or pick one</b><div class="cegrid">${Object.keys(ICONS).map(ic=>`<button type="button" data-icon="${ic}" aria-pressed="${ic===c.icon&&!c.svg&&!c.emoji}" aria-label="Icon ${ic}"><span class="av" style="--c:${c.color};--s:32px"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[ic]}</svg></span></button>`).join('')}</div>
         <b>Color</b><div class="cegrid">${PALETTE.map(col=>`<button type="button" data-color="${col}" aria-pressed="${col.toUpperCase()===c.color.toUpperCase()}" aria-label="Color ${col}"><span class="sw" style="--c:${col}"></span></button>`).join('')}</div>
-        <label class="cecustom"><input type="color" data-ce="color" value="${c.color}">Any other color</label></div>`:''}
+        <label class="cecustom"><input type="color" data-ce="color" value="${c.color}">Any other color</label>
+        <b>When favorited, move to</b>${favToHtml(k,c)}</div>`:''}
     </div>`;}).join('');
+  if(ceMerge)syncMergeUi();
+}
+function favToHtml(k,c){
+  const cur=favTarget(k),opts=Object.entries(CATS).filter(([x])=>x!==k);
+  const note=cur?(c.l?`Favorites here become places in ${esc(CATS[cur].label)}. Unfavorite one and it comes back here, so ${esc(CATS[cur].label)} keeps only its favorites.`:`Favorites here move to ${esc(CATS[cur].label)}. Unfavorite one and it moves back here.`):'Favorites stay here and just get a star.';
+  return `<select class="cefav" data-ce="favto" aria-label="When favorited, move to"><option value="">Nowhere, just add a star</option>${opts.map(([x,o])=>`<option value="${x}"${x===cur?' selected':''}>${esc(o.label)}</option>`).join('')}</select><small class="cenote">${note}</small>`;
+}
+function setFavTo(k,v){
+  const l=ceLayer(k);
+  if(l)l.favTo=v;else{S.cats.favTo=S.cats.favTo||{};if(v)S.cats.favTo[k]=v;else delete S.cats.favTo[k];}
+  /* unhooking: send back what the old rule moved */
+  S.places.forEach(p=>{if(p.favFrom===k&&!v){p.cat=k;delete p.favFrom;}});
+  settleHotelFavs();lastInput=Date.now();save();refresh();renderCatEd();
 }
 function setCat(k,patch){
   const l=ceLayer(k);
@@ -2313,9 +2351,43 @@ function setCat(k,patch){
   else{const cu=S.cats.custom.find(x=>x.key===k);if(cu)Object.assign(cu,patch);else S.cats.edit[k]={...(S.cats.edit[k]||{}),...patch};}
   save();refresh();
 }
-function openCatEd(){ceOpen=null;aiRes=null;renderCatEd();$('#catEd').hidden=false;$('#catEdScroll').scrollTop=0;syncCeThumb();}
+function openCatEd(){ceOpen=null;aiRes=null;ceMerge=null;syncMergeUi();renderCatEd();$('#catEd').hidden=false;$('#catEdScroll').scrollTop=0;syncCeThumb();}
 function closeCatEd(){document.activeElement?.blur?.();$('#catEd').hidden=true;ceOpen=null;}
 $('#catEdDone').onclick=closeCatEd;
+/* merge: pick two or more categories, then choose which one keeps everything */
+function syncMergeUi(){
+  const on=!!ceMerge;$('#catEd').classList.toggle('merging',on);
+  $('#catEdMerge').textContent=on?'Cancel':'Merge';
+  $('#catEdT').textContent=on?'Pick to merge':'Edit categories';
+  const b=$('#catEdDoMerge');b.hidden=!on;if(on){b.disabled=ceMerge.length<2;b.textContent=ceMerge.length<2?'Pick at least 2':`Merge ${ceMerge.length} categories`;}
+  document.querySelectorAll('#catEdList .cerow').forEach(r=>r.classList.toggle('picked',!!ceMerge&&ceMerge.includes(r.dataset.k)));
+}
+$('#catEdMerge').onclick=()=>{ceMerge=ceMerge?null:[];ceOpen=null;renderCatEd();syncMergeUi();};
+$('#catEdDoMerge').onclick=async()=>{
+  const keys=ceMerge;if(!keys||keys.length<2)return;
+  const isL=k=>!!ceLayer(k);
+  if(keys.some(isL)&&keys.some(k=>!isL(k))){ask({msg:'Search categories (the ones with a dot) and regular categories can\'t be merged together.\nTo send a search category\'s favorites into a regular category, tap its icon and use “When favorited, move to”.',cancel:null});return;}
+  const i=await ask({msg:'Merge into which one? The others are removed and everything in them moves there.',choices:keys.map(k=>{const c=ceInfo(k);return {label:c.label,sub:`${c.n} ${c.l?'locations':'places'}`};})});
+  if(i==null)return;
+  const to=keys[i],from=keys.filter(k=>k!==to);
+  if(isL(to)){
+    const T=ceLayer(to);
+    from.forEach(k=>{const L=ceLayer(k);
+      L.items.forEach(d=>{if(!T.items.some(x=>(d.gid&&x.gid===d.gid)||(Math.abs(x.lat-d.lat)<1e-5&&Math.abs(x.lng-d.lng)<1e-5)))T.items.push(d);});
+      S.layers=S.layers.filter(x=>x!==L);S.places.forEach(p=>{if(p.fromDot?.lid===k)p.fromDot.lid=to;});});
+  }else{
+    from.forEach(k=>{
+      S.places.forEach(p=>{if(p.cat===k)p.cat=to;if(p.favFrom===k)p.favFrom=to;});
+      S.layers.forEach(l=>{if(l.favTo===k)l.favTo=to;});
+      const ft=S.cats.favTo||{};for(const x in ft)if(ft[x]===k)ft[x]=to;
+      if(k==='other')return;
+      delete ft[k];
+      if(BASE_CATS[k]){S.cats.deleted.push(k);delete S.cats.edit[k];}else S.cats.custom=S.cats.custom.filter(x=>x.key!==k);
+    });
+  }
+  S.cats.order=S.cats.order.filter(k=>!from.includes(k)||k==='other');S.hidden=S.hidden.filter(k=>!from.includes(k)||k==='other');
+  ceMerge=null;lastInput=Date.now();settleHotelFavs();save();refresh();renderCatEd();syncMergeUi();
+};
 /* iPhone: a scroll box resting exactly at its top or bottom can get stuck, so keep it 1px off the edge */
 $('#catEdScroll').addEventListener('touchstart',()=>{const el=$('#catEdScroll'),max=el.scrollHeight-el.clientHeight;if(max<=0)return;if(el.scrollTop<=0)el.scrollTop=1;else if(el.scrollTop>=max)el.scrollTop=max-1;},{passive:true});
 /* a big handle on the right to drag the list, like the one on the places list */
@@ -2339,6 +2411,7 @@ addEventListener('resize',()=>{if(!$('#catEd').hidden)syncCeThumb();});
 $('#catEd').onclick=e=>{
   if(e.target.id==='catEd')return closeCatEd();
   const row=e.target.closest('.cerow');if(!row)return;const k=row.dataset.k;
+  if(ceMerge){ceMerge=ceMerge.includes(k)?ceMerge.filter(x=>x!==k):[...ceMerge,k];syncMergeUi();return;}
   const ic=e.target.closest('[data-icon]');if(ic){setCat(k,{icon:ic.dataset.icon,svg:null,emoji:null});return renderCatEd();}
   const as=e.target.closest('[data-aisvg]');if(as&&aiRes?.icons){setCat(k,{svg:aiRes.icons[+as.dataset.aisvg],emoji:null});return renderCatEd();}
   const co=e.target.closest('[data-color]');if(co){setCat(k,{color:co.dataset.color});return renderCatEd();}
@@ -2368,6 +2441,7 @@ $('#catEd').addEventListener('change',e=>{
   if(e.target.dataset.ce==='name'){const v=e.target.value.trim();if(!v){e.target.value=ceInfo(k).label;return;}setCat(k,{label:v});}
   /* update in place: re-drawing here would swallow the tap that moved focus away */
   if(e.target.dataset.ce==='emoji'){const v=firstEmoji(e.target.value);setCat(k,v?{emoji:v}:{emoji:null});e.target.value=v;const c=ceInfo(k);row.querySelector('.ceicon').innerHTML=c.l?layerAv(c.l,36):av(k,36);row.querySelectorAll('[data-icon],[data-aisvg]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.icon?String(!v&&x.dataset.icon===c.icon&&!c.svg):String(!v&&aiRes?.icons?.[+x.dataset.aisvg]===c.svg)));}
+  if(e.target.dataset.ce==='favto'){setFavTo(k,e.target.value);return;}
   if(e.target.dataset.ce==='color'){setCat(k,{color:e.target.value.toUpperCase()});renderCatEd();}
 });
 $('#catEd').addEventListener('keydown',e=>{
