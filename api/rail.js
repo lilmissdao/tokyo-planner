@@ -42,7 +42,7 @@ function simplify(p,tol){
 }
 function segDist(p,a,b){const k=Math.cos(a[0]*rad)*R*rad,ax=a[1]*k,ay=a[0]*R*rad,bx=b[1]*k-ax,by=b[0]*R*rad-ay,px=p[1]*k-ax,py=p[0]*R*rad-ay;const l=bx*bx+by*by;const t=l?Math.max(0,Math.min(1,(px*bx+py*by)/l)):0;return Math.hypot(px-t*bx,py-t*by);}
 async function overpass(q){
-  let last;for(const u of OVERPASS){try{const r=await fetch(u,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded','user-agent':'tokyo-planner (vercel)'},body:'data='+encodeURIComponent(q)});if(r.ok)return await r.json();last=r.status;}catch(e){last=e.message;}}
+  let last;for(const u of OVERPASS){try{const r=await fetch(u,{signal:AbortSignal.timeout(28000),method:'POST',headers:{'content-type':'application/x-www-form-urlencoded','user-agent':'tokyo-planner (vercel)'},body:'data='+encodeURIComponent(q)});if(r.ok)return await r.json();last=r.status;}catch(e){last=e.message;}}
   throw new Error('overpass '+last);
 }
 module.exports=async(req,res)=>{
